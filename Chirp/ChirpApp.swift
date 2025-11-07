@@ -1,6 +1,6 @@
 //
-//  ChirpApp.swift
-//  Chirp
+//  TimeTrackerApp.swift
+//  TimeTracker
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -9,10 +9,14 @@ import SwiftUI
 import SwiftData
 
 @main
-struct ChirpApp: App {
+struct TimeTrackerApp: App {
+    @StateObject private var timerManager = TimerManager()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Client.self,
+            Project.self,
+            TimeEntry.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,8 +29,17 @@ struct ChirpApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView()
+                .environmentObject(timerManager)
+                .onAppear {
+                    // Seed sample data on first launch
+                    Task { @MainActor in
+                        SampleDataManager.createSampleData(context: sharedModelContainer.mainContext)
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 520, height: 680)
     }
 }

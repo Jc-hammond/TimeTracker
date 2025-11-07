@@ -1,0 +1,282 @@
+//
+//  ReportsView.swift
+//  TimeTracker
+//
+//  Created by Connor Hammond on 11/6/25.
+//
+
+import SwiftUI
+import SwiftData
+import Charts
+
+struct ReportsView: View {
+    @Query private var allEntries: [TimeEntry]
+
+    @State private var selectedPeriod: TimePeriod = .week
+
+    enum TimePeriod: String, CaseIterable {
+        case day = "Day"
+        case week = "Week"
+        case month = "Month"
+    }
+
+    private var filteredEntries: [TimeEntry] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        return allEntries.filter { entry in
+            guard !entry.isRunning else { return false }
+
+            switch selectedPeriod {
+            case .day:
+                return calendar.isDateInToday(entry.startTime)
+            case .week:
+                guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) else {
+                    return false
+                }
+                return entry.startTime >= weekStart
+            case .month:
+                return calendar.isDate(entry.startTime, equalTo: now, toGranularity: .month)
+            }
+        }
+    }
+
+    private var totalDuration: TimeInterval {
+        filteredEntries.reduce(0) { $0 + $1.duration }
+    }
+
+    private var totalEarnings: Double {
+        filteredEntries.reduce(0) { $0 + $1.earnings }
+    }
+
+    private var averageRate: Double {
+        guard totalDuration > 0 else { return 0 }
+        let hours = totalDuration / 3600
+        return totalEarnings / hours
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.generous) {
+                // Period selector
+                Picker("Period", selection: $selectedPeriod) {
+                    ForEach(TimePeriod.allCases, id: \.self) { period in
+                        Text(period.rawValue).tag(period)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.top)
+
+                // Summary cards
+                HStack(spacing: DesignSystem.Spacing.clear) {
+                    SummaryCard(
+                        title: "Total Time",
+                        value: totalDuration.formattedShort,
+                        icon: "clock.fill",
+                        color: .blue
+                    )
+
+                    SummaryCard(
+                        title: "Total Earnings",
+                        value: totalEarnings.formattedCurrency,
+                        icon: "dollarsign.circle.fill",
+                        color: .green
+                    )
+
+                    SummaryCard(
+                        title: "Avg. Rate",
+                        value: averageRate.formattedCurrency + "/hr",
+                        icon: "chart.line.uptrend.xyaxis",
+                        color: .orange
+                    )
+                }
+                .padding(.horizontal)
+
+                // Chart
+                if !filteredEntries.isEmpty {
+                    ProjectBreakdownChart(entries: filteredEntries)
+                        .padding(.horizontal)
+                }
+
+                // Entry list
+                TimeEntryList(entries: filteredEntries)
+                    .padding(.horizontal)
+            }
+            .padding(.bottom, DesignSystem.Spacing.generous)
+        }
+        .navigationTitle("Reports")
+    }
+}
+
+// MARK: - Summary Card
+struct SummaryCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.comfortable) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.system(size: 20))
+
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.tight) {
+                Text(value)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
+
+                Text(title)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+            }
+        }
+        .padding(DesignSystem.Spacing.clear)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+}
+
+// MARK: - Project Breakdown Chart
+struct ProjectBreakdownChart: View {
+    let entries: [TimeEntry]
+
+    private var projectData: [(project: String, duration: TimeInterval, color: Color)] {
+        let grouped = Dictionary(grouping: entries) { $0.project }
+
+        return grouped.compactMap { project, entries in
+            guard let proj = project else { return nil }
+            let duration = entries.reduce(0) { $0 + $1.duration }
+            let color = proj.client?.color ?? DesignSystem.Colors.accent
+            return (proj.displayName, duration, color)
+        }
+        .sorted { $0.duration > $1.duration }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.clear) {
+            Text("Time by Project")
+                .font(DesignSystem.Typography.title3)
+                .foregroundColor(DesignSystem.Colors.primaryText)
+
+            Chart {
+                ForEach(Array(projectData.enumerated()), id: \.offset) { index, data in
+                    BarMark(
+                        x: .value("Duration", data.duration / 3600),
+                        y: .value("Project", data.project)
+                    )
+                    .foregroundStyle(data.color)
+                }
+            }
+            .frame(height: max(200, CGFloat(projectData.count) * 50))
+            .chartXAxis {
+                AxisMarks(position: .bottom) { value in
+                    AxisValueLabel {
+                        if let hours = value.as(Double.self) {
+                            Text("\(Int(hours))h")
+                        }
+                    }
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.spacious)
+        .cardStyle()
+    }
+}
+
+// MARK: - Time Entry List
+struct TimeEntryList: View {
+    let entries: [TimeEntry]
+
+    private var groupedEntries: [(date: Date, entries: [TimeEntry])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: entries) { entry in
+            calendar.startOfDay(for: entry.startTime)
+        }
+
+        return grouped.map { (date: $0.key, entries: $0.value) }
+            .sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.clear) {
+            Text("Recent Entries")
+                .font(DesignSystem.Typography.title3)
+                .foregroundColor(DesignSystem.Colors.primaryText)
+                .padding(.bottom, DesignSystem.Spacing.close)
+
+            VStack(spacing: DesignSystem.Spacing.comfortable) {
+                ForEach(groupedEntries, id: \.date) { group in
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.close) {
+                        Text(group.date, style: .date)
+                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                            .padding(.horizontal, DesignSystem.Spacing.clear)
+
+                        ForEach(group.entries.sorted(by: { $0.startTime > $1.startTime })) { entry in
+                            TimeEntryRow(entry: entry)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct TimeEntryRow: View {
+    let entry: TimeEntry
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.comfortable) {
+            if let client = entry.project?.client {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(client.color)
+                    .frame(width: 4, height: 48)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let project = entry.project {
+                    Text(project.displayName)
+                        .font(DesignSystem.Typography.body.weight(.medium))
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                }
+
+                HStack(spacing: DesignSystem.Spacing.close) {
+                    Text(entry.startTime, style: .time)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+
+                    if !entry.notes.isEmpty {
+                        Text("•")
+                            .foregroundColor(DesignSystem.Colors.tertiaryText)
+
+                        Text(entry.notes)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(entry.duration.formattedShort)
+                    .font(DesignSystem.Typography.body.weight(.medium))
+                    .foregroundColor(DesignSystem.Colors.primaryText)
+
+                Text(entry.earnings.formattedCurrency)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.success)
+            }
+        }
+        .padding(DesignSystem.Spacing.comfortable)
+        .background(DesignSystem.Colors.cardBackground)
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+    }
+}
