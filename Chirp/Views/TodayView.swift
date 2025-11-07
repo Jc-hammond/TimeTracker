@@ -258,7 +258,7 @@ struct CurrentSessionCard: View {
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .monospacedDigit()
 
-                    ProgressView(value: session.progress)
+                    ProgressView(value: progressValue)
                         .tint(session.category.color)
                         .frame(width: 120)
                 }
@@ -275,7 +275,16 @@ struct CurrentSessionCard: View {
         }
     }
 
+    var progressValue: Double {
+        // Use elapsedTime to force update
+        _ = elapsedTime
+        return session.progress
+    }
+
     var timeString: String {
+        // Use elapsedTime to force SwiftUI to recalculate every second
+        _ = elapsedTime
+
         let remaining = session.plannedDuration - session.actualDuration
         let duration = remaining > 0 ? remaining : session.actualDuration
         let minutes = Int(duration) / 60

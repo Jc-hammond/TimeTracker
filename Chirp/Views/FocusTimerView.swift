@@ -403,10 +403,15 @@ struct FocusTimerView: View {
     // MARK: - Computed Properties
     var progress: Double {
         guard let session = activeSession else { return 0 }
+        // Use elapsedTime to force update
+        _ = elapsedTime
         return session.progress
     }
 
     var timeString: String {
+        // Use elapsedTime to force SwiftUI to recalculate every second
+        _ = elapsedTime
+
         if let session = activeSession {
             let remaining = session.plannedDuration - session.actualDuration
             return remaining > 0 ? formatDuration(remaining) : formatDuration(session.actualDuration)

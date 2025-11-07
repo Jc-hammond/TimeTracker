@@ -114,7 +114,7 @@ struct MenuBarPopoverView: View {
                 .monospacedDigit()
 
             // Progress
-            ProgressView(value: session.progress)
+            ProgressView(value: progressValue(for: session))
                 .tint(session.category.color)
 
             // Task (if any)
@@ -281,7 +281,16 @@ struct MenuBarPopoverView: View {
     }
 
     // MARK: - Helper Methods
+    func progressValue(for session: FocusSession) -> Double {
+        // Use elapsedTime to force update
+        _ = elapsedTime
+        return session.progress
+    }
+
     func timeString(for session: FocusSession) -> String {
+        // Use elapsedTime to force SwiftUI to recalculate every second
+        _ = elapsedTime
+
         let remaining = session.plannedDuration - session.actualDuration
         let duration = max(remaining, 0)
         let minutes = Int(duration) / 60
