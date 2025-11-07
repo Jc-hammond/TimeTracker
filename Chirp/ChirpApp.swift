@@ -31,7 +31,7 @@ struct TimeTrackerApp: App {
 
     init() {
         // Configure app to stay running with windows closed
-        NSApp.setActivationPolicy(.regular)
+//        NSApp.setActivationPolicy(.regular)
     }
 
     var body: some Scene {
@@ -42,13 +42,14 @@ struct TimeTrackerApp: App {
                     // Initialize app delegate dependencies
                     appDelegate.timerManager = timerManager
                     appDelegate.modelContext = sharedModelContainer.mainContext
+                    timerManager.configure(with: sharedModelContainer.mainContext)
 
                     // Seed sample data on first launch
                     Task { @MainActor in
                         SampleDataManager.createSampleData(context: sharedModelContainer.mainContext)
 
                         // Restore timer state after data is loaded
-                        timerManager.restoreTimerState(modelContext: sharedModelContainer.mainContext)
+                        timerManager.restoreTimerState()
                     }
                 }
         }

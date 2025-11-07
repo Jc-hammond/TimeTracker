@@ -203,10 +203,7 @@ struct ActiveTimerCard: View {
 
     private func stopTimer() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            if let stoppedEntry = timerManager.stopTimer() {
-                modelContext.insert(stoppedEntry)
-                try? modelContext.save()
-            }
+            _ = timerManager.stopTimer()
         }
     }
 }
@@ -260,7 +257,6 @@ struct IdleTimerCard: View {
 // MARK: - Quick Start Button
 struct QuickStartButton: View {
     @EnvironmentObject var timerManager: TimerManager
-    @Environment(\.modelContext) private var modelContext
 
     let project: Project
 
@@ -294,7 +290,6 @@ struct QuickStartButton: View {
 
     private func startTracking() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            project.lastUsedAt = Date()
             timerManager.startTimer(for: project)
         }
     }

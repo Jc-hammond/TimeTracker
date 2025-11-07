@@ -193,10 +193,7 @@ class MenuBarManager: NSObject, ObservableObject {
     @objc private func startTimerForProject(_ sender: NSMenuItem) {
         guard let project = sender.representedObject as? Project else { return }
 
-        project.lastUsedAt = Date()
         timerManager.startTimer(for: project)
-
-        try? modelContext.save()
     }
 
     @objc private func pauseTimer() {
@@ -208,10 +205,7 @@ class MenuBarManager: NSObject, ObservableObject {
     }
 
     @objc private func stopTimer() {
-        if let entry = timerManager.stopTimer() {
-            modelContext.insert(entry)
-            try? modelContext.save()
-        }
+        _ = timerManager.stopTimer()
     }
 
     @objc private func showMainWindow() {
