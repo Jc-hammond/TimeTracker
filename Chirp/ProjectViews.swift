@@ -157,20 +157,27 @@ struct NewProjectSheet: View {
     @State private var hourlyRate = ""
     @State private var selectedClient: Client?
     @State private var showingNewClient = false
+    @FocusState private var focusedField: Field?
+
+    enum Field {
+        case projectName, hourlyRate
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Project Details") {
-                    TextField("Project name", text: $projectName)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Name:", text: $projectName)
+                        .focused($focusedField, equals: .projectName)
+                        .help("Enter the project name")
 
-                    TextField("Hourly rate", text: $hourlyRate)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Hourly rate:", text: $hourlyRate)
+                        .focused($focusedField, equals: .hourlyRate)
+                        .help("Enter the hourly rate in USD")
                 }
 
                 Section("Client") {
-                    Picker("Client", selection: $selectedClient) {
+                    Picker("Client:", selection: $selectedClient) {
                         Text("No client").tag(nil as Client?)
                         ForEach(clients) { client in
                             HStack {
@@ -182,18 +189,23 @@ struct NewProjectSheet: View {
                             .tag(client as Client?)
                         }
                     }
+                    .pickerStyle(.menu)
 
-                    Button("New Client") {
+                    Button("Create New Client...") {
                         showingNewClient = true
                     }
                 }
             }
+            .formStyle(.grouped)
+            .frame(width: 480, height: 400)
+            .controlSize(.regular)
             .navigationTitle("New Project")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -201,7 +213,11 @@ struct NewProjectSheet: View {
                         createProject()
                     }
                     .disabled(projectName.isEmpty || hourlyRate.isEmpty)
+                    .keyboardShortcut(.defaultAction)
                 }
+            }
+            .onAppear {
+                focusedField = .projectName
             }
         }
         .sheet(isPresented: $showingNewClient) {
@@ -230,6 +246,7 @@ struct NewClientSheet: View {
     @State private var clientName = ""
     @State private var defaultRate = ""
     @State private var selectedColorHex = "FF6B35"
+    @FocusState private var isNameFieldFocused: Bool
 
     let onClientCreated: (Client) -> Void
 
@@ -237,37 +254,51 @@ struct NewClientSheet: View {
         NavigationStack {
             Form {
                 Section("Client Details") {
-                    TextField("Client name", text: $clientName)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Name:", text: $clientName)
+                        .focused($isNameFieldFocused)
+                        .help("Enter the client name")
 
-                    TextField("Default hourly rate", text: $defaultRate)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Default rate:", text: $defaultRate)
+                        .help("Optional default hourly rate for new projects")
                 }
 
-                Section("Color") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: DesignSystem.Spacing.comfortable) {
-                        ForEach(DesignSystem.Colors.clientColors, id: \.self) { colorHex in
-                            Button(action: { selectedColorHex = colorHex }) {
-                                Circle()
-                                    .fill(Color(hex: colorHex))
-                                    .frame(width: 44, height: 44)
-                                    .overlay(
-                                        Circle()
-                                            .strokeBorder(Color.white, lineWidth: selectedColorHex == colorHex ? 3 : 0)
-                                    )
-                                    .shadow(radius: 2)
+                Section {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.close) {
+                        Text("Choose a color to identify this client")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: DesignSystem.Spacing.comfortable) {
+                            ForEach(DesignSystem.Colors.clientColors, id: \.self) { colorHex in
+                                Button(action: { selectedColorHex = colorHex }) {
+                                    Circle()
+                                        .fill(Color(hex: colorHex))
+                                        .frame(width: 44, height: 44)
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(DesignSystem.Colors.accent, lineWidth: selectedColorHex == colorHex ? 3 : 0)
+                                        )
+                                        .shadow(color: Color(hex: colorHex).opacity(0.3), radius: selectedColorHex == colorHex ? 4 : 2)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.top, DesignSystem.Spacing.close)
                     }
+                } header: {
+                    Text("Color")
                 }
             }
+            .formStyle(.grouped)
+            .frame(width: 480, height: 450)
+            .controlSize(.regular)
             .navigationTitle("New Client")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -275,7 +306,11 @@ struct NewClientSheet: View {
                         createClient()
                     }
                     .disabled(clientName.isEmpty)
+                    .keyboardShortcut(.defaultAction)
                 }
+            }
+            .onAppear {
+                isNameFieldFocused = true
             }
         }
     }
@@ -299,6 +334,8 @@ struct ProjectListView: View {
 
     @State private var showingNewProject = false
     @State private var searchText = ""
+    @State private var projectToEdit: Project?
+    @State private var projectToArchive: Project?
 
     var filteredProjects: [Project] {
         if searchText.isEmpty {
@@ -315,7 +352,23 @@ struct ProjectListView: View {
         VStack {
             List {
                 ForEach(filteredProjects) { project in
-                    ProjectListRow(project: project)
+                    ProjectListRow(project: project) {
+                        projectToEdit = project
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            projectToArchive = project
+                        } label: {
+                            Label("Archive", systemImage: "archivebox")
+                        }
+
+                        Button {
+                            projectToEdit = project
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                 }
                 .onDelete(perform: deleteProjects)
             }
@@ -330,6 +383,32 @@ struct ProjectListView: View {
         .sheet(isPresented: $showingNewProject) {
             NewProjectSheet()
         }
+        .sheet(item: $projectToEdit) { project in
+            EditProjectSheet(project: project)
+        }
+        .alert("Archive Project", isPresented: .init(
+            get: { projectToArchive != nil },
+            set: { if !$0 { projectToArchive = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                projectToArchive = nil
+            }
+            Button("Archive", role: .destructive) {
+                if let project = projectToArchive {
+                    archiveProject(project)
+                }
+            }
+        } message: {
+            if let project = projectToArchive {
+                Text("Are you sure you want to archive '\(project.name)'? You can still see archived projects and their time entries, but they won't appear in active lists.")
+            }
+        }
+    }
+
+    private func archiveProject(_ project: Project) {
+        project.isArchived = true
+        try? modelContext.save()
+        projectToArchive = nil
     }
 
     private func deleteProjects(at offsets: IndexSet) {
@@ -347,11 +426,10 @@ struct ProjectListView: View {
 
 struct ProjectListRow: View {
     let project: Project
-
-    @State private var showingEditSheet = false
+    let onTap: () -> Void
 
     var body: some View {
-        Button(action: { showingEditSheet = true }) {
+        Button(action: onTap) {
             HStack {
                 if let client = project.client {
                     RoundedRectangle(cornerRadius: 2)
@@ -375,16 +453,9 @@ struct ProjectListRow: View {
                 Text(project.hourlyRate.formattedCurrency + "/hr")
                     .font(DesignSystem.Typography.callout)
                     .foregroundColor(DesignSystem.Colors.secondaryText)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundColor(DesignSystem.Colors.tertiaryText)
             }
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showingEditSheet) {
-            EditProjectSheet(project: project)
-        }
     }
 }
 
@@ -401,6 +472,11 @@ struct EditProjectSheet: View {
     @State private var selectedClient: Client?
     @State private var showingNewClient = false
     @State private var showDeleteConfirmation = false
+    @FocusState private var focusedField: Field?
+
+    enum Field {
+        case projectName, hourlyRate
+    }
 
     init(project: Project) {
         self.project = project
@@ -413,15 +489,17 @@ struct EditProjectSheet: View {
         NavigationStack {
             Form {
                 Section("Project Details") {
-                    TextField("Project name", text: $projectName)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Name:", text: $projectName)
+                        .focused($focusedField, equals: .projectName)
+                        .help("Enter the project name")
 
-                    TextField("Hourly rate", text: $hourlyRate)
-                        .font(DesignSystem.Typography.body)
+                    TextField("Hourly rate:", text: $hourlyRate)
+                        .focused($focusedField, equals: .hourlyRate)
+                        .help("Enter the hourly rate in USD")
                 }
 
                 Section("Client") {
-                    Picker("Client", selection: $selectedClient) {
+                    Picker("Client:", selection: $selectedClient) {
                         Text("No client").tag(nil as Client?)
                         ForEach(clients) { client in
                             HStack {
@@ -433,8 +511,9 @@ struct EditProjectSheet: View {
                             .tag(client as Client?)
                         }
                     }
+                    .pickerStyle(.menu)
 
-                    Button("New Client") {
+                    Button("Create New Client...") {
                         showingNewClient = true
                     }
                 }
@@ -445,12 +524,16 @@ struct EditProjectSheet: View {
                     }
                 }
             }
+            .formStyle(.grouped)
+            .frame(width: 480, height: 450)
+            .controlSize(.regular)
             .navigationTitle("Edit Project")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -458,7 +541,11 @@ struct EditProjectSheet: View {
                         saveChanges()
                     }
                     .disabled(!isValid)
+                    .keyboardShortcut(.defaultAction)
                 }
+            }
+            .onAppear {
+                focusedField = .projectName
             }
             .alert("Archive Project", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {}

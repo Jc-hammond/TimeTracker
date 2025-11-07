@@ -44,7 +44,7 @@ struct EditTimeEntrySheet: View {
         NavigationStack {
             Form {
                 Section("Project") {
-                    Picker("Project", selection: $selectedProject) {
+                    Picker("Project:", selection: $selectedProject) {
                         Text("No project").tag(nil as Project?)
                         ForEach(projects.filter { !$0.isArchived }) { project in
                             HStack {
@@ -58,27 +58,36 @@ struct EditTimeEntrySheet: View {
                             .tag(project as Project?)
                         }
                     }
+                    .pickerStyle(.menu)
                 }
 
                 Section("Time") {
-                    DatePicker("Start", selection: $startTime)
-                    DatePicker("End", selection: $endTime)
+                    DatePicker("Start:", selection: $startTime)
+                    DatePicker("End:", selection: $endTime)
 
+                    // Summary card
                     HStack {
-                        Text("Duration")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Duration")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                            Text(duration.formattedShort)
+                                .font(DesignSystem.Typography.callout.weight(.semibold))
+                                .foregroundColor(DesignSystem.Colors.accent)
+                        }
                         Spacer()
-                        Text(duration.formattedShort)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-
-                    if selectedProject != nil {
-                        HStack {
-                            Text("Earnings")
-                            Spacer()
-                            Text(earnings.formattedCurrency)
-                                .foregroundColor(DesignSystem.Colors.success)
+                        if selectedProject != nil {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Earnings")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                                Text(earnings.formattedCurrency)
+                                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                                    .foregroundColor(DesignSystem.Colors.success)
+                            }
                         }
                     }
+                    .padding(.vertical, 8)
                 }
 
                 Section("Notes") {
@@ -92,12 +101,16 @@ struct EditTimeEntrySheet: View {
                     }
                 }
             }
+            .formStyle(.grouped)
+            .frame(width: 500, height: 550)
+            .controlSize(.regular)
             .navigationTitle("Edit Time Entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -105,6 +118,7 @@ struct EditTimeEntrySheet: View {
                         saveChanges()
                     }
                     .disabled(!isValid)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .alert("Delete Entry", isPresented: $showDeleteConfirmation) {
@@ -175,7 +189,7 @@ struct ManualTimeEntrySheet: View {
         NavigationStack {
             Form {
                 Section("Project") {
-                    Picker("Select Project", selection: $selectedProject) {
+                    Picker("Project:", selection: $selectedProject) {
                         Text("Choose a project").tag(nil as Project?)
                         ForEach(projects.filter { !$0.isArchived }) { project in
                             HStack {
@@ -189,61 +203,66 @@ struct ManualTimeEntrySheet: View {
                             .tag(project as Project?)
                         }
                     }
+                    .pickerStyle(.menu)
                 }
 
                 Section("Time") {
-                    DatePicker("Start Time", selection: $startTime)
+                    DatePicker("Start:", selection: $startTime)
 
                     Toggle("Enter Duration", isOn: $useDuration)
 
                     if useDuration {
                         HStack {
-                            Text("Duration")
-
-                            Spacer()
-
-                            Picker("Hours", selection: $durationHours) {
+                            Picker("Hours:", selection: $durationHours) {
                                 ForEach(0..<24) { hour in
-                                    Text("\(hour)h").tag(hour)
+                                    Text("\(hour) hours").tag(hour)
                                 }
                             }
                             .pickerStyle(.menu)
-                            .frame(width: 80)
+                            .frame(maxWidth: .infinity)
 
-                            Picker("Minutes", selection: $durationMinutes) {
+                            Picker("Minutes:", selection: $durationMinutes) {
                                 ForEach([0, 15, 30, 45], id: \.self) { minute in
-                                    Text("\(minute)m").tag(minute)
+                                    Text("\(minute) min").tag(minute)
                                 }
                             }
                             .pickerStyle(.menu)
-                            .frame(width: 80)
+                            .frame(maxWidth: .infinity)
                         }
 
                         HStack {
-                            Text("End Time")
+                            Text("End Time:")
                             Spacer()
                             Text(calculatedEndTime, style: .time)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                                .foregroundColor(DesignSystem.Colors.accent)
                         }
                     } else {
-                        DatePicker("End Time", selection: $endTime)
+                        DatePicker("End:", selection: $endTime)
+                    }
 
-                        HStack {
+                    // Summary
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text("Duration")
-                            Spacer()
-                            Text(duration.formattedShort)
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundColor(DesignSystem.Colors.secondaryText)
+                            Text(duration.formattedShort)
+                                .font(DesignSystem.Typography.callout.weight(.semibold))
+                                .foregroundColor(DesignSystem.Colors.accent)
+                        }
+                        Spacer()
+                        if selectedProject != nil {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Earnings")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                                Text(earnings.formattedCurrency)
+                                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                                    .foregroundColor(DesignSystem.Colors.success)
+                            }
                         }
                     }
-
-                    if selectedProject != nil {
-                        HStack {
-                            Text("Earnings")
-                            Spacer()
-                            Text(earnings.formattedCurrency)
-                                .foregroundColor(DesignSystem.Colors.success)
-                        }
-                    }
+                    .padding(.vertical, 8)
                 }
 
                 Section("Notes") {
@@ -251,12 +270,16 @@ struct ManualTimeEntrySheet: View {
                         .lineLimit(3...6)
                 }
             }
+            .formStyle(.grouped)
+            .frame(width: 520, height: 600)
+            .controlSize(.regular)
             .navigationTitle("Add Time Entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -264,6 +287,7 @@ struct ManualTimeEntrySheet: View {
                         addEntry()
                     }
                     .disabled(!isValid)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
         }
