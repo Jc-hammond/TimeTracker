@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+internal import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true

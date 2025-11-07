@@ -125,7 +125,7 @@ class MenuBarManager {
         updateStatusButton()
     }
 
-    @objc private func showMainWindow() {
+    @objc func showMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
 
         // Find and show main window
