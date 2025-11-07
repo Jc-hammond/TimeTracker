@@ -13,6 +13,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     case focus = "Focus"
     case tasks = "Tasks"
     case analytics = "Analytics"
+    case settings = "Settings"
 
     var id: String { rawValue }
 
@@ -22,6 +23,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .focus: return "timer"
         case .tasks: return "checklist"
         case .analytics: return "chart.bar.fill"
+        case .settings: return "gear"
         }
     }
 }
@@ -65,6 +67,8 @@ struct MainView: View {
                     TaskListView()
                 case .analytics:
                     AnalyticsView()
+                case .settings:
+                    SettingsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
