@@ -347,30 +347,153 @@ struct ProjectListView: View {
 struct ProjectListRow: View {
     let project: Project
 
+    @State private var showingEditSheet = false
+
     var body: some View {
-        HStack {
-            if let client = project.client {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(client.color)
-                    .frame(width: 4, height: 40)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(project.name)
-                    .font(DesignSystem.Typography.body.weight(.medium))
-
+        Button(action: { showingEditSheet = true }) {
+            HStack {
                 if let client = project.client {
-                    Text(client.name)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(client.color)
+                        .frame(width: 4, height: 40)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.name)
+                        .font(DesignSystem.Typography.body.weight(.medium))
+
+                    if let client = project.client {
+                        Text(client.name)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                Text(project.hourlyRate.formattedCurrency + "/hr")
+                    .font(DesignSystem.Typography.callout)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
+            }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingEditSheet) {
+            EditProjectSheet(project: project)
+        }
+    }
+}
+
+// MARK: - Edit Project Sheet
+struct EditProjectSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Client.name) private var clients: [Client]
+
+    let project: Project
+
+    @State private var projectName: String
+    @State private var hourlyRate: String
+    @State private var selectedClient: Client?
+    @State private var showingNewClient = false
+    @State private var showDeleteConfirmation = false
+
+    init(project: Project) {
+        self.project = project
+        _projectName = State(initialValue: project.name)
+        _hourlyRate = State(initialValue: String(format: "%.2f", project.hourlyRate))
+        _selectedClient = State(initialValue: project.client)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Project Details") {
+                    TextField("Project name", text: $projectName)
+                        .font(DesignSystem.Typography.body)
+
+                    TextField("Hourly rate", text: $hourlyRate)
+                        .font(DesignSystem.Typography.body)
+                }
+
+                Section("Client") {
+                    Picker("Client", selection: $selectedClient) {
+                        Text("No client").tag(nil as Client?)
+                        ForEach(clients) { client in
+                            HStack {
+                                Circle()
+                                    .fill(client.color)
+                                    .frame(width: 12, height: 12)
+                                Text(client.name)
+                            }
+                            .tag(client as Client?)
+                        }
+                    }
+
+                    Button("New Client") {
+                        showingNewClient = true
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                        Label("Archive Project", systemImage: "archivebox")
+                    }
                 }
             }
+            .navigationTitle("Edit Project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
 
-            Spacer()
-
-            Text(project.hourlyRate.formattedCurrency + "/hr")
-                .font(DesignSystem.Typography.callout)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+            .alert("Archive Project", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Archive", role: .destructive) {
+                    archiveProject()
+                }
+            } message: {
+                Text("Are you sure you want to archive '\(project.name)'? You can still see archived projects and their time entries, but they won't appear in active lists.")
+            }
         }
+        .sheet(isPresented: $showingNewClient) {
+            NewClientSheet(onClientCreated: { client in
+                selectedClient = client
+            })
+        }
+    }
+
+    private var isValid: Bool {
+        !projectName.isEmpty && !hourlyRate.isEmpty && Double(hourlyRate) != nil
+    }
+
+    private func saveChanges() {
+        guard let rate = Double(hourlyRate) else { return }
+
+        project.name = projectName
+        project.hourlyRate = rate
+        project.client = selectedClient
+
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func archiveProject() {
+        project.isArchived = true
+        try? modelContext.save()
+        dismiss()
     }
 }

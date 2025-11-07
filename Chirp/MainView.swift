@@ -139,27 +139,58 @@ struct SidebarView: View {
 }
 
 struct ProjectRowView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var timerManager: TimerManager
+
     let project: Project
 
+    @State private var showingEditSheet = false
+
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.close) {
-            if let client = project.client {
-                Circle()
-                    .fill(client.color)
-                    .frame(width: 8, height: 8)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-
+        Button(action: startTimer) {
+            HStack(spacing: DesignSystem.Spacing.close) {
                 if let client = project.client {
-                    Text(client.name)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.tertiaryText)
+                    Circle()
+                        .fill(client.color)
+                        .frame(width: 8, height: 8)
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(project.name)
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+
+                    if let client = project.client {
+                        Text(client.name)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.tertiaryText)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(DesignSystem.Colors.accent.opacity(0.6))
             }
         }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(action: { showingEditSheet = true }) {
+                Label("Edit Project", systemImage: "pencil")
+            }
+
+            Button(action: startTimer) {
+                Label("Start Timer", systemImage: "play.fill")
+            }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            EditProjectSheet(project: project)
+        }
+    }
+
+    private func startTimer() {
+        project.lastUsedAt = Date()
+        timerManager.startTimer(for: project)
     }
 }
