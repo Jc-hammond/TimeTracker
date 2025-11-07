@@ -12,12 +12,22 @@ enum DesignSystem {
 
     // MARK: - Colors
     enum Colors {
-        // Primary accent
-        static let accent = Color(hex: "FF6B35")
-        static let accentDark = Color(hex: "FF8C42")
+        // Primary accent (Blue for trust & productivity)
+        static var accent: Color {
+            Color(nsColor: NSColor(named: "AccentColor") ?? NSColor.controlAccentColor)
+        }
 
-        // Success & earnings
-        static let success = Color.green.opacity(0.7)
+        static let accentBlue = Color(hex: "007AFF")      // SF Blue
+        static let accentTeal = Color(hex: "5AC8FA")      // Teal
+        static let accentPurple = Color(hex: "AF52DE")    // Purple for special moments
+
+        // Success & earnings (Green for balance)
+        static let success = Color(hex: "34C759")
+        static let successSubtle = Color(hex: "34C759").opacity(0.7)
+
+        // Focus & concentration
+        static let focusBlue = Color(hex: "0A84FF")       // Lighter blue for dark mode
+        static let focusTeal = Color(hex: "64D2FF")       // Cyan for highlights
 
         // Client colors
         static let clientColors: [String] = [
@@ -52,6 +62,19 @@ enum DesignSystem {
         static var tertiaryText: Color {
             Color(nsColor: .tertiaryLabelColor)
         }
+
+        // Gradients
+        static let primaryGradient = LinearGradient(
+            colors: [accentBlue, accentTeal],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        static let celebrationGradient = LinearGradient(
+            colors: [accentPurple, accentBlue],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - Typography
@@ -104,12 +127,23 @@ enum DesignSystem {
         )
     }
 
-    // MARK: - Animation Durations
-    enum Animation {
-        static let quick: Double = 0.12
-        static let normal: Double = 0.18
-        static let smooth: Double = 0.25
-        static let slow: Double = 0.35
+    // MARK: - Animations
+    enum Animations {
+        // SwiftUI Spring Animations (feels alive!)
+        static let smooth = SwiftUI.Animation.smooth(duration: 0.25)
+        static let snappy = SwiftUI.Animation.snappy(duration: 0.18)
+        static let bouncy = SwiftUI.Animation.bouncy(duration: 0.35)
+
+        // Custom springs for specific interactions
+        static let buttonPress = SwiftUI.Animation.spring(response: 0.3, dampingFraction: 0.7)
+        static let cardEntrance = SwiftUI.Animation.spring(response: 0.4, dampingFraction: 0.8)
+        static let celebration = SwiftUI.Animation.spring(response: 0.5, dampingFraction: 0.6)
+
+        // Legacy durations (for non-animation use)
+        static let quickDuration: Double = 0.12
+        static let normalDuration: Double = 0.18
+        static let smoothDuration: Double = 0.25
+        static let slowDuration: Double = 0.35
     }
 }
 
@@ -134,6 +168,32 @@ extension View {
             x: DesignSystem.Shadows.subtle.x,
             y: DesignSystem.Shadows.subtle.y
         )
+    }
+
+    // Hover effects for interactive elements
+    func hoverEffect(scale: CGFloat = 1.02) -> some View {
+        self.modifier(HoverEffectModifier(scale: scale))
+    }
+
+    // Animated spring transition
+    func springTransition(value: some Equatable) -> some View {
+        self.animation(DesignSystem.Animations.smooth, value: value)
+    }
+}
+
+// MARK: - Hover Effect Modifier
+struct HoverEffectModifier: ViewModifier {
+    let scale: CGFloat
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovering ? scale : 1.0)
+            .brightness(isHovering ? 0.05 : 0)
+            .animation(DesignSystem.Animations.snappy, value: isHovering)
+            .onHover { hovering in
+                isHovering = hovering
+            }
     }
 }
 

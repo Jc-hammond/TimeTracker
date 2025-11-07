@@ -149,6 +149,7 @@ struct ActiveTimerCard: View {
                     .cornerRadius(DesignSystem.CornerRadius.medium)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(scale: 1.03)
 
                 // Stop button
                 Button(action: stopTimer) {
@@ -163,6 +164,7 @@ struct ActiveTimerCard: View {
                     .cornerRadius(DesignSystem.CornerRadius.medium)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(scale: 1.03)
             }
             .padding(.top, DesignSystem.Spacing.clear)
         }
@@ -192,7 +194,7 @@ struct ActiveTimerCard: View {
     }
 
     private func togglePause() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(DesignSystem.Animations.buttonPress) {
             if timerManager.isPaused {
                 timerManager.resumeTimer()
             } else {
@@ -202,7 +204,7 @@ struct ActiveTimerCard: View {
     }
 
     private func stopTimer() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(DesignSystem.Animations.buttonPress) {
             if let stoppedEntry = timerManager.stopTimer() {
                 modelContext.insert(stoppedEntry)
                 try? modelContext.save()
@@ -236,6 +238,7 @@ struct IdleTimerCard: View {
                     .cornerRadius(DesignSystem.CornerRadius.medium)
             }
             .buttonStyle(.plain)
+            .hoverEffect(scale: 1.03)
 
             // Quick start
             if !recentProjects.isEmpty {
@@ -290,10 +293,11 @@ struct QuickStartButton: View {
             .cornerRadius(DesignSystem.CornerRadius.small)
         }
         .buttonStyle(.plain)
+        .hoverEffect(scale: 1.02)
     }
 
     private func startTracking() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(DesignSystem.Animations.buttonPress) {
             project.lastUsedAt = Date()
             timerManager.startTimer(for: project)
         }
