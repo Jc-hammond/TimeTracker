@@ -428,6 +428,10 @@ struct FocusTimerView: View {
         )
         modelContext.insert(session)
         currentSession = session
+
+        // Save immediately to sync with menu bar
+        try? modelContext.save()
+
         startTimer()
     }
 
@@ -440,6 +444,9 @@ struct FocusTimerView: View {
             session.pause()
             stopTimer()
         }
+
+        // Save immediately to sync with menu bar
+        try? modelContext.save()
     }
 
     func stopSession() {
@@ -453,6 +460,9 @@ struct FocusTimerView: View {
             energyLevel: sessionEnergyLevel,
             notes: sessionNotes.isEmpty ? nil : sessionNotes
         )
+
+        // Save immediately to sync with menu bar
+        try? modelContext.save()
 
         // Reset state
         currentSession = nil

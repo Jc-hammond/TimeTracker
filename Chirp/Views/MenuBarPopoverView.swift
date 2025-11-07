@@ -133,6 +133,9 @@ struct MenuBarPopoverView: View {
                     } else {
                         session.pause()
                     }
+
+                    // Save immediately to sync with main app
+                    try? modelContext.save()
                 } label: {
                     Image(systemName: session.isPaused ? "play.fill" : "pause.fill")
                         .frame(maxWidth: .infinity)
@@ -141,7 +144,9 @@ struct MenuBarPopoverView: View {
 
                 Button {
                     session.complete()
-                    manager.currentSession = nil
+
+                    // Save immediately to sync with main app
+                    try? modelContext.save()
                 } label: {
                     Image(systemName: "checkmark")
                         .frame(maxWidth: .infinity)
@@ -152,6 +157,9 @@ struct MenuBarPopoverView: View {
             // Add Interruption
             Button {
                 session.addInterruption()
+
+                // Save immediately to sync with main app
+                try? modelContext.save()
             } label: {
                 Label("Interruption (\(session.interruptionCount))", systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)

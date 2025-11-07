@@ -17,8 +17,21 @@ class MenuBarManager {
     private var popover: NSPopover?
     private var modelContext: ModelContext?
 
-    var currentSession: FocusSession?
     var isMenuBarEnabled = true
+
+    // Computed property to always get the current active session from SwiftData
+    var currentSession: FocusSession? {
+        guard let modelContext = modelContext else { return nil }
+
+        let descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate<FocusSession> { session in
+                session.endTime == nil
+            },
+            sortBy: [SortDescriptor(\.startTime, order: .reverse)]
+        )
+
+        return try? modelContext.fetch(descriptor).first
+    }
 
     private init() {}
 
@@ -111,17 +124,28 @@ class MenuBarManager {
 
     @objc private func pauseSession() {
         currentSession?.pause()
+
+        // Save context to persist the changes
+        try? modelContext?.save()
+
         updateStatusButton()
     }
 
     @objc private func resumeSession() {
         currentSession?.resume()
+
+        // Save context to persist the changes
+        try? modelContext?.save()
+
         updateStatusButton()
     }
 
     @objc private func stopSession() {
         currentSession?.complete()
-        currentSession = nil
+
+        // Save context to persist the changes
+        try? modelContext?.save()
+
         updateStatusButton()
     }
 
@@ -149,7 +173,10 @@ class MenuBarManager {
             category: category
         )
         modelContext.insert(session)
-        currentSession = session
+
+        // Save context to persist the session
+        try? modelContext.save()
+
         updateStatusButton()
 
         // Show notification
