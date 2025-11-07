@@ -8,6 +8,7 @@
 import Cocoa
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContext: ModelContext?
@@ -47,22 +48,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestNotificationPermissions() {
-        let center = NSUserNotificationCenter.default
+        let center = UNUserNotificationCenter.current()
         center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                print("Notification permission error: \(error)")
+            }
+        }
     }
 }
 
 // MARK: - Notification Delegate
-extension AppDelegate: NSUserNotificationCenterDelegate {
-    func userNotificationCenter(_ center: NSUserNotificationCenter, shouldPresent notification: NSUserNotification) -> Bool {
-        return true
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        // Show notifications even when app is in foreground
+        return [.banner, .sound]
     }
 
-    func userNotificationCenter(_ center: NSUserNotificationCenter, didActivate notification: NSUserNotification) {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         // Show main window when notification is clicked
-        NSApp.activate(ignoringOtherApps: true)
-        for window in NSApp.windows {
-            window.makeKeyAndOrderFront(nil)
+        await MainActor.run {
+            NSApp.activate(ignoringOtherApps: true)
+            for window in NSApp.windows {
+                window.makeKeyAndOrderFront(nil)
+            }
         }
     }
 }

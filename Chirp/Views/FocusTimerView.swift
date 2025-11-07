@@ -36,42 +36,63 @@ struct FocusTimerView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 30) {
+        ZStack {
+            // Ambient background gradient
+            LinearGradient(
+                colors: [
+                    selectedCategory.color.opacity(0.08),
+                    Color.clear,
+                    selectedCategory.color.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.6), value: selectedCategory)
+
+            VStack(spacing: 32) {
                 // Header
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Text("Focus Session")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .tracking(0.5)
 
                     if let session = activeSession {
                         Text("Started \(session.startTime, style: .relative) ago")
                             .font(.subheadline)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                     } else {
                         Text("Ready to start your deep work")
                             .font(.subheadline)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.top, 40)
 
-                // Timer Display
-                timerDisplay
-
-                // Controls
+                // Controls or Timer Display based on state
                 if activeSession != nil {
+                    // Timer Display (prominent during session)
+                    timerDisplay
+
+                    // Active Session Controls
                     activeSessionControls
                 } else {
+                    // Timer Preview
+                    timerDisplay
+                    
+                    // Session Setup
                     sessionSetup
                 }
 
                 Spacer()
             }
             .padding()
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: 700)
-        .frame(maxWidth: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             if let active = activeSession {
                 currentSession = active
@@ -85,36 +106,59 @@ struct FocusTimerView: View {
 
     // MARK: - Timer Display
     var timerDisplay: some View {
-        ZStack {
-            // Progress Ring
-            Circle()
-                .stroke(Color.gray.opacity(0.2), lineWidth: 20)
-                .frame(width: 280, height: 280)
+        let isActive = activeSession != nil
+        let size: CGFloat = 280
+        let fontSize: CGFloat = 56
+        let lineWidth: CGFloat = 20
 
+        return ZStack {
+            // Ambient glow background
+            Circle()
+                .fill(selectedCategory.color.opacity(0.15))
+                .frame(width: size + 60, height: size + 60)
+                .blur(radius: 40)
+
+            // Progress Ring Background
+            Circle()
+                .stroke(Color.gray.opacity(0.15), lineWidth: lineWidth)
+                .frame(width: size, height: size)
+
+            // Progress Ring with gradient
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(
-                    selectedCategory.color.gradient,
-                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
+                    LinearGradient(
+                        colors: [
+                            selectedCategory.color,
+                            selectedCategory.color.opacity(0.7)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .frame(width: 280, height: 280)
+                .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
-                .animation(.easeInOut, value: progress)
+                .shadow(color: selectedCategory.color.opacity(0.5), radius: 12, x: 0, y: 4)
+                .animation(.easeInOut(duration: 0.3), value: progress)
 
             // Time Display
-            VStack(spacing: 8) {
+            VStack(spacing: isActive ? 12 : 8) {
                 Text(timeString)
-                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .font(.system(size: fontSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .tracking(1)
 
                 if let session = activeSession {
                     Text(session.category.rawValue)
                         .font(.headline)
+                        .fontWeight(.semibold)
                         .foregroundStyle(session.category.color)
 
                     if let taskTitle = session.taskTitle {
                         Text(taskTitle)
                             .font(.subheadline)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .frame(maxWidth: 200)
@@ -123,105 +167,114 @@ struct FocusTimerView: View {
                     if session.isPaused {
                         Text("Paused")
                             .font(.caption)
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.2))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.gradient)
                             .clipShape(Capsule())
+                            .shadow(color: .orange.opacity(0.4), radius: 8, y: 2)
                     }
+                } else {
+                    Text(selectedCategory.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(selectedCategory.color)
                 }
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isActive)
+        .animation(.easeInOut(duration: 0.3), value: selectedCategory)
     }
 
     // MARK: - Session Setup (Before Starting)
     var sessionSetup: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             // Session Type
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Label("Session Type", systemImage: "timer")
-                    .font(.headline)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
 
-                HStack(spacing: 12) {
+                Picker("", selection: $selectedSessionType) {
                     ForEach(SessionType.allCases) { type in
-                        SessionTypeButton(
-                            type: type,
-                            isSelected: selectedSessionType == type
-                        ) {
-                            selectedSessionType = type
-                        }
+                        Text(type.rawValue).tag(type)
                     }
                 }
+                .pickerStyle(.segmented)
             }
 
             // Category
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Label("Category", systemImage: "folder.fill")
-                    .font(.headline)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
+                Picker("", selection: $selectedCategory) {
                     ForEach(TaskCategory.allCases) { category in
-                        CategoryButton(
-                            category: category,
-                            isSelected: selectedCategory == category
-                        ) {
-                            selectedCategory = category
-                        }
+                        Label(category.rawValue, systemImage: category.icon)
+                            .tag(category)
                     }
                 }
+                .pickerStyle(.menu)
+                .frame(height: 40)
             }
 
             // Task Selection (Optional)
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Task (Optional)", systemImage: "checklist")
-                    .font(.headline)
+            if !incompleteTasks.isEmpty {
+                Menu {
+                    Button("No task selected") {
+                        selectedTask = nil
+                    }
 
-                if incompleteTasks.isEmpty {
-                    Text("No tasks yet")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    Menu {
-                        Button("No task selected") {
-                            selectedTask = nil
-                        }
+                    Divider()
 
-                        Divider()
-
-                        ForEach(incompleteTasks) { task in
-                            Button {
-                                selectedTask = task
-                            } label: {
-                                Label {
-                                    Text(task.title)
-                                } icon: {
-                                    Image(systemName: task.category.icon)
-                                }
+                    ForEach(incompleteTasks) { task in
+                        Button {
+                            selectedTask = task
+                        } label: {
+                            Label {
+                                Text(task.title)
+                            } icon: {
+                                Image(systemName: task.category.icon)
                             }
                         }
-                    } label: {
-                        HStack {
-                            if let task = selectedTask {
-                                Label(task.title, systemImage: task.category.icon)
-                                    .foregroundStyle(task.category.color)
-                            } else {
-                                Text("Select a task...")
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.down")
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if let task = selectedTask {
+                            Image(systemName: task.category.icon)
+                                .foregroundStyle(task.category.color)
+                            Text(task.title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                        } else {
+                            Image(systemName: "link")
+                                .foregroundStyle(.secondary)
+                            Text("Link Task")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding()
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
                 }
+                .buttonStyle(.plain)
             }
 
             // Start Button
@@ -229,32 +282,52 @@ struct FocusTimerView: View {
                 startSession()
             } label: {
                 Label("Start Focus Session", systemImage: "play.fill")
-                    .font(.headline)
+                    .font(.title3)
+                    .fontWeight(.bold)
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(selectedCategory.color.gradient)
+                    .padding(.vertical, 18)
+                    .padding(.horizontal, 28)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                selectedCategory.color,
+                                selectedCategory.color.opacity(0.8)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: selectedCategory.color.opacity(0.4), radius: 16, y: 6)
             }
             .buttonStyle(.plain)
             .padding(.top, 8)
         }
-        .padding()
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 20, y: 8)
     }
 
     // MARK: - Active Session Controls
     var activeSessionControls: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             // Interruption Counter
             if let session = activeSession {
                 HStack {
                     Label("Interruptions", systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline)
+                        .fontWeight(.semibold)
 
                     Spacer()
 
                     Text("\(session.interruptionCount)")
-                        .font(.title3)
+                        .font(.title2)
                         .fontWeight(.bold)
                         .foregroundStyle(.orange)
 
@@ -262,18 +335,31 @@ struct FocusTimerView: View {
                         session.addInterruption()
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+                            .font(.title2)
                             .foregroundStyle(.orange)
                     }
                     .buttonStyle(.plain)
                 }
-                .padding()
-                .background(Color.orange.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(16)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color.orange.opacity(0.15),
+                            Color.orange.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
             }
 
             // Control Buttons
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 // Pause/Resume
                 Button {
                     togglePause()
@@ -283,68 +369,118 @@ struct FocusTimerView: View {
                         systemImage: activeSession?.isPaused == true ? "play.fill" : "pause.fill"
                     )
                     .font(.headline)
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.opacity(0.1))
+                    .padding(.vertical, 14)
+                    .background(.ultraThinMaterial)
                     .foregroundStyle(.blue)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: .blue.opacity(0.2), radius: 8, y: 4)
                 }
                 .buttonStyle(.plain)
 
-                // Stop
+                // Complete
                 Button {
                     stopSession()
                 } label: {
                     Label("Complete", systemImage: "checkmark.circle.fill")
                         .font(.headline)
+                        .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green.opacity(0.1))
-                        .foregroundStyle(.green)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.green, Color.green.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .green.opacity(0.3), radius: 12, y: 4)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding()
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 20, y: 8)
     }
 
     // MARK: - Session Complete Sheet
     var sessionCompleteSheet: some View {
-        VStack(spacing: 24) {
-            Text("Session Complete!")
-                .font(.title)
-                .fontWeight(.bold)
+        VStack(spacing: 28) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.green.gradient)
+                    .shadow(color: .green.opacity(0.3), radius: 12, y: 4)
+
+                Text("Session Complete!")
+                    .font(.system(.title, design: .rounded, weight: .bold))
+            }
 
             if let session = currentSession {
-                VStack(spacing: 8) {
-                    Text("Duration: \(formatDuration(session.actualDuration))")
-                        .font(.headline)
+                VStack(spacing: 12) {
+                    HStack {
+                        Label("Duration", systemImage: "clock.fill")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(formatDuration(session.actualDuration))
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
 
                     if session.interruptionCount > 0 {
-                        Text("\(session.interruptionCount) interruption\(session.interruptionCount == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Label("Interruptions", systemImage: "exclamationmark.triangle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(session.interruptionCount)")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(16)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
             }
 
             // Focus Quality Rating
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Focus Quality")
                     .font(.headline)
+                    .fontWeight(.semibold)
 
-                HStack {
+                HStack(spacing: 8) {
                     ForEach(1...5, id: \.self) { rating in
                         Button {
                             sessionFocusQuality = rating
                         } label: {
                             Image(systemName: rating <= sessionFocusQuality ? "star.fill" : "star")
-                                .foregroundStyle(rating <= sessionFocusQuality ? .yellow : .gray)
-                                .font(.title2)
+                                .foregroundStyle(rating <= sessionFocusQuality ? .yellow : .gray.opacity(0.4))
+                                .font(.title)
+                                .shadow(color: rating <= sessionFocusQuality ? .yellow.opacity(0.3) : .clear, radius: 4)
                         }
                         .buttonStyle(.plain)
                     }
@@ -352,18 +488,20 @@ struct FocusTimerView: View {
             }
 
             // Energy Level Rating
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Energy Level")
                     .font(.headline)
+                    .fontWeight(.semibold)
 
-                HStack {
+                HStack(spacing: 8) {
                     ForEach(1...5, id: \.self) { rating in
                         Button {
                             sessionEnergyLevel = rating
                         } label: {
                             Image(systemName: rating <= sessionEnergyLevel ? "bolt.fill" : "bolt")
-                                .foregroundStyle(rating <= sessionEnergyLevel ? .orange : .gray)
-                                .font(.title2)
+                                .foregroundStyle(rating <= sessionEnergyLevel ? .orange : .gray.opacity(0.4))
+                                .font(.title)
+                                .shadow(color: rating <= sessionEnergyLevel ? .orange.opacity(0.3) : .clear, radius: 4)
                         }
                         .buttonStyle(.plain)
                     }
@@ -371,15 +509,20 @@ struct FocusTimerView: View {
             }
 
             // Notes
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Notes (Optional)")
                     .font(.headline)
+                    .fontWeight(.semibold)
 
                 TextEditor(text: $sessionNotes)
                     .frame(height: 80)
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
             }
 
             // Save Button
@@ -388,16 +531,26 @@ struct FocusTimerView: View {
             } label: {
                 Text("Save Session")
                     .font(.headline)
+                    .fontWeight(.bold)
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.gradient)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [.blue, .blue.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: .blue.opacity(0.4), radius: 16, y: 6)
             }
             .buttonStyle(.plain)
         }
-        .padding(32)
-        .frame(width: 500)
+        .padding(36)
+        .frame(width: 520)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
     // MARK: - Computed Properties

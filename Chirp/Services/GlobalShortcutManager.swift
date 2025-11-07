@@ -54,7 +54,7 @@ class GlobalShortcutManager {
             &eventHandler
         )
 
-        var hotKeyID = EventHotKeyID(signature: OSType(0x4348), id: 1)
+        let hotKeyID = EventHotKeyID(signature: OSType(0x4348), id: 1)
 
         RegisterEventHotKey(
             keyCode,
