@@ -10,7 +10,8 @@ import SwiftUI
 import Combine
 import SwiftData
 
-class TimerManager: ObservableObject {
+@MainActor
+final class TimerManager: ObservableObject {
     @Published var activeEntry: TimeEntry?
     @Published var elapsedTime: TimeInterval = 0
     @Published var currentNotes: String = ""
@@ -20,6 +21,7 @@ class TimerManager: ObservableObject {
     private var startTime: Date?
     private var pausedTime: Date?
     private var totalPausedDuration: TimeInterval = 0
+    private var modelContext: ModelContext?
 
     private let defaults = UserDefaults.standard
     private let timerStateKey = "activeTimerState"
@@ -32,6 +34,10 @@ class TimerManager: ObservableObject {
         // Timer state is restored via restoreTimerState() called from app
     }
 
+    func configure(with context: ModelContext) {
+        modelContext = context
+    }
+
     // MARK: - Persistence
     func saveTimerState() {
         guard let entry = activeEntry, let start = startTime else {
@@ -39,35 +45,43 @@ class TimerManager: ObservableObject {
             return
         }
 
-        let state: [String: Any] = [
+        var state: [String: Any] = [
             "startTime": start,
             "notes": currentNotes,
             "isPaused": isPaused,
-            "pausedTime": pausedTime as Any,
             "totalPausedDuration": totalPausedDuration,
-            "projectName": entry.project?.name ?? "",
-            "clientName": entry.project?.client?.name ?? ""
+            "projectID": entry.project?.id.uuidString ?? ""
         ]
+
+        // Only include pausedTime if it exists (avoid NSNull in UserDefaults)
+        if let pausedTime = pausedTime {
+            state["pausedTime"] = pausedTime
+        }
 
         defaults.set(state, forKey: timerStateKey)
     }
 
-    func restoreTimerState(modelContext: ModelContext) {
-        guard let state = defaults.dictionary(forKey: timerStateKey),
-              let savedStartTime = state["startTime"] as? Date,
-              let projectName = state["projectName"] as? String else {
+    func restoreTimerState() {
+        guard let context = modelContext,
+              let state = defaults.dictionary(forKey: timerStateKey),
+              let savedStartTime = state["startTime"] as? Date else {
             return
         }
 
-        // Find the project
+        guard let projectIDString = state["projectID"] as? String,
+              let projectID = UUID(uuidString: projectIDString),
+              !projectIDString.isEmpty else {
+            clearTimerState()
+            return
+        }
+
         let descriptor = FetchDescriptor<Project>(
             predicate: #Predicate { project in
-                project.name == projectName
+                project.id == projectID
             }
         )
 
-        guard let projects = try? modelContext.fetch(descriptor),
-              let project = projects.first else {
+        guard let project = try? context.fetch(descriptor).first else {
             clearTimerState()
             return
         }
@@ -91,7 +105,9 @@ class TimerManager: ObservableObject {
             startTimer()
         }
 
-        updateElapsedTime()
+        let referenceDate = isPaused ? (savedPausedTime ?? Date()) : Date()
+        let computedElapsed = max(0, referenceDate.timeIntervalSince(savedStartTime) - savedPausedDuration)
+        elapsedTime = computedElapsed
     }
 
     func clearTimerState() {
@@ -100,18 +116,22 @@ class TimerManager: ObservableObject {
 
     // MARK: - Timer Control
     func startTimer(for project: Project, notes: String = "") {
-        // Stop any existing timer
+        // Persist any existing entry before starting a new one
         stopTimer()
 
         // Create new time entry
-        let entry = TimeEntry(project: project, startTime: Date(), notes: notes)
+        let now = Date()
+        let entry = TimeEntry(project: project, startTime: now, notes: notes)
         activeEntry = entry
-        startTime = Date()
+        startTime = now
         currentNotes = notes
         elapsedTime = 0
         isPaused = false
         pausedTime = nil
         totalPausedDuration = 0
+
+        project.lastUsedAt = Date()
+        try? modelContext?.save()
 
         startTimer()
         saveTimerState()
@@ -138,6 +158,10 @@ class TimerManager: ObservableObject {
 
     func pauseTimer() {
         guard isTracking, !isPaused else { return }
+
+        if let start = startTime {
+            elapsedTime = Date().timeIntervalSince(start) - totalPausedDuration
+        }
 
         isPaused = true
         pausedTime = Date()
@@ -168,15 +192,10 @@ class TimerManager: ObservableObject {
         entry.endTime = Date()
         entry.notes = currentNotes
 
-        let stoppedEntry = entry
-        activeEntry = nil
-        elapsedTime = 0
-        currentNotes = ""
-        startTime = nil
-        isPaused = false
-        pausedTime = nil
-        totalPausedDuration = 0
+        persist(entry)
 
+        let stoppedEntry = entry
+        resetState()
         clearTimerState()
 
         return stoppedEntry
@@ -196,5 +215,27 @@ class TimerManager: ObservableObject {
         guard let project = activeEntry?.project else { return 0 }
         let hours = elapsedTime / 3600.0
         return hours * project.hourlyRate
+    }
+
+    // MARK: - Persistence Helpers
+    private func persist(_ entry: TimeEntry) {
+        guard let context = modelContext else { return }
+
+        context.insert(entry)
+        do {
+            try context.save()
+        } catch {
+            print("Failed to save time entry: \(error)")
+        }
+    }
+
+    private func resetState() {
+        activeEntry = nil
+        elapsedTime = 0
+        currentNotes = ""
+        startTime = nil
+        isPaused = false
+        pausedTime = nil
+        totalPausedDuration = 0
     }
 }

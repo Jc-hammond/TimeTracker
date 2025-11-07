@@ -93,7 +93,6 @@ struct EditTimeEntrySheet: View {
                 }
             }
             .navigationTitle("Edit Time Entry")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -212,7 +211,7 @@ struct ManualTimeEntrySheet: View {
                             .frame(width: 80)
 
                             Picker("Minutes", selection: $durationMinutes) {
-                                ForEach([0, 15, 30, 45]) { minute in
+                                ForEach([0, 15, 30, 45], id: \.self) { minute in
                                     Text("\(minute)m").tag(minute)
                                 }
                             }
@@ -253,7 +252,6 @@ struct ManualTimeEntrySheet: View {
                 }
             }
             .navigationTitle("Add Time Entry")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -295,3 +293,4 @@ struct ManualTimeEntrySheet: View {
         dismiss()
     }
 }
+

@@ -10,7 +10,6 @@ import SwiftData
 
 // MARK: - Project Picker Sheet
 struct ProjectPickerSheet: View {
-    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var timerManager: TimerManager
     @Query(sort: \Project.lastUsedAt, order: .reverse) private var projects: [Project]
 
@@ -75,7 +74,6 @@ struct ProjectPickerSheet: View {
                 }
             }
             .navigationTitle("Select Project")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -96,7 +94,6 @@ struct ProjectPickerSheet: View {
     }
 
     private func startTimer(for project: Project) {
-        project.lastUsedAt = Date()
         timerManager.startTimer(for: project, notes: notes)
         isPresented = false
     }
@@ -192,7 +189,6 @@ struct NewProjectSheet: View {
                 }
             }
             .navigationTitle("New Project")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -267,7 +263,6 @@ struct NewClientSheet: View {
                 }
             }
             .navigationTitle("New Client")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -338,9 +333,15 @@ struct ProjectListView: View {
     }
 
     private func deleteProjects(at offsets: IndexSet) {
-        for index in offsets {
-            projects[index].isArchived = true
+        let currentFiltered = filteredProjects
+        let targets = offsets.compactMap { index -> Project? in
+            guard currentFiltered.indices.contains(index) else { return nil }
+            return currentFiltered[index]
         }
+        for project in targets {
+            project.isArchived = true
+        }
+        try? modelContext.save()
     }
 }
 
@@ -445,7 +446,6 @@ struct EditProjectSheet: View {
                 }
             }
             .navigationTitle("Edit Project")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

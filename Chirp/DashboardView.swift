@@ -205,10 +205,7 @@ struct ActiveTimerCard: View {
 
     private func stopTimer() {
         withAnimation(DesignSystem.Animations.buttonPress) {
-            if let stoppedEntry = timerManager.stopTimer() {
-                modelContext.insert(stoppedEntry)
-                try? modelContext.save()
-            }
+            _ = timerManager.stopTimer()
         }
     }
 }
@@ -263,7 +260,6 @@ struct IdleTimerCard: View {
 // MARK: - Quick Start Button
 struct QuickStartButton: View {
     @EnvironmentObject var timerManager: TimerManager
-    @Environment(\.modelContext) private var modelContext
 
     let project: Project
 

@@ -139,7 +139,6 @@ struct SidebarView: View {
 }
 
 struct ProjectRowView: View {
-    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var timerManager: TimerManager
 
     let project: Project
@@ -190,7 +189,6 @@ struct ProjectRowView: View {
     }
 
     private func startTimer() {
-        project.lastUsedAt = Date()
         timerManager.startTimer(for: project)
     }
 }

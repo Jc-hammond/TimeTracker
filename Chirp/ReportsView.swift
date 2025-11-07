@@ -32,10 +32,10 @@ struct ReportsView: View {
             case .day:
                 return calendar.isDateInToday(entry.startTime)
             case .week:
-                guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) else {
+                guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else {
                     return false
                 }
-                return entry.startTime >= weekStart
+                return interval.contains(entry.startTime)
             case .month:
                 return calendar.isDate(entry.startTime, equalTo: now, toGranularity: .month)
             }
