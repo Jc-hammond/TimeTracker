@@ -1,6 +1,6 @@
 //
 //  BirdMascot.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -118,7 +118,7 @@ struct BirdMascot: View {
         Triangle()
             .fill(DesignSystem.Colors.accentPurple.opacity(0.8))
             .frame(width: size * 0.1, height: size * 0.08)
-            .offset(y: size * 0.05)
+            .offset(y: size * -0.15)
     }
 
     // MARK: - Mood-based Properties

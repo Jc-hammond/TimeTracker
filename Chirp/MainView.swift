@@ -1,6 +1,6 @@
 //
 //  MainView.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -51,11 +51,6 @@ struct MainView: View {
             ManualTimeEntrySheet()
         }
         .onAppear {
-            // Setup menu bar
-            if let appDelegate = NSApp.delegate as? AppDelegate {
-                appDelegate.setDependencies(timerManager: timerManager, modelContext: modelContext)
-            }
-
             // Setup keyboard shortcut handlers
             setupNotificationObservers()
         }
@@ -133,17 +128,19 @@ struct SidebarView: View {
                 }
             }
         }
-        .navigationTitle("TimeTracker")
+        .navigationTitle("Chirp")
         .frame(minWidth: 240)
     }
 }
 
 struct ProjectRowView: View {
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var timerManager: TimerManager
 
     let project: Project
 
     @State private var showingEditSheet = false
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         Button(action: startTimer) {
@@ -182,13 +179,36 @@ struct ProjectRowView: View {
             Button(action: startTimer) {
                 Label("Start Timer", systemImage: "play.fill")
             }
+
+            Divider()
+
+            Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                Label("Delete Project", systemImage: "trash")
+            }
         }
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
+        }
+        .alert("Delete Project Permanently", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteProject()
+            }
+        } message: {
+            let entryCount = project.timeEntries?.count ?? 0
+            let totalDuration = project.timeEntries?.reduce(0) { $0 + $1.duration } ?? 0
+            let totalEarnings = project.timeEntries?.reduce(0) { $0 + $1.earnings } ?? 0
+
+            return Text("Are you sure you want to permanently delete '\(project.name)'?\n\nThis will delete \(entryCount) time \(entryCount == 1 ? "entry" : "entries") totaling \(totalDuration.formattedShort) and \(totalEarnings.formattedCurrency) in earnings.\n\nThis action cannot be undone.")
         }
     }
 
     private func startTimer() {
         timerManager.startTimer(for: project)
+    }
+
+    private func deleteProject() {
+        modelContext.delete(project)
+        try? modelContext.save()
     }
 }

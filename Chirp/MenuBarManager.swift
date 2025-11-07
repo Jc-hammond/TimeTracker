@@ -1,6 +1,6 @@
 //
 //  MenuBarManager.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -15,46 +15,65 @@ class MenuBarManager: NSObject, ObservableObject {
     private var timerManager: TimerManager
     private var modelContext: ModelContext
     private var cancellables = Set<AnyCancellable>()
+    private var isUpdatingMenu = false
 
     init(timerManager: TimerManager, modelContext: ModelContext) {
+        print("🎯 MenuBarManager: Initializing")
         self.timerManager = timerManager
         self.modelContext = modelContext
         super.init()
 
         setupMenuBar()
         observeTimerChanges()
+        print("✅ MenuBarManager: Initialization complete")
     }
 
     private func setupMenuBar() {
+        print("🎨 MenuBarManager: Setting up menu bar")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        if let button = statusItem?.button {
-            updateMenuBarButton()
+        if let statusItem = statusItem {
+            print("✅ MenuBarManager: Status item created successfully")
+
+            if let button = statusItem.button {
+                print("✅ MenuBarManager: Status item button exists")
+                updateMenuBarButton()
+            } else {
+                print("⚠️ MenuBarManager: Status item button is nil")
+            }
+        } else {
+            print("❌ MenuBarManager: Failed to create status item")
         }
 
         updateMenu()
+        print("✅ MenuBarManager: Menu bar setup complete")
     }
 
     private func observeTimerChanges() {
-        // Update menu bar when timer changes
+        // Observe activeEntry changes - rebuild entire menu (debounced to prevent duplicates)
         timerManager.$activeEntry
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.updateMenuBarButton()
-                self?.updateMenu()
+                DispatchQueue.main.async {
+                    self?.updateMenuBarButton()
+                    self?.updateMenu()
+                }
             }
             .store(in: &cancellables)
 
-        timerManager.$elapsedTime
-            .sink { [weak self] _ in
+        // Observe time/pause changes - update button and rebuild menu for pause state
+        Publishers.CombineLatest(
+            timerManager.$elapsedTime,
+            timerManager.$isPaused
+        )
+        .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+        .sink { [weak self] _ in
+            DispatchQueue.main.async {
                 self?.updateMenuBarButton()
+                self?.updateMenu()  // Rebuild menu to update pause/resume button text
             }
-            .store(in: &cancellables)
-
-        timerManager.$isPaused
-            .sink { [weak self] _ in
-                self?.updateMenuBarButton()
-            }
-            .store(in: &cancellables)
+        }
+        .store(in: &cancellables)
     }
 
     private func updateMenuBarButton() {
@@ -70,6 +89,11 @@ class MenuBarManager: NSObject, ObservableObject {
     }
 
     private func updateMenu() {
+        // Prevent concurrent menu updates
+        guard !isUpdatingMenu else { return }
+        isUpdatingMenu = true
+        defer { isUpdatingMenu = false }
+
         let menu = NSMenu()
 
         // Current timer section
@@ -83,13 +107,21 @@ class MenuBarManager: NSObject, ObservableObject {
                 timerItem.isEnabled = false
                 menu.addItem(timerItem)
 
-                let timeItem = NSMenuItem(
-                    title: "   \(timerManager.formattedTime)",
-                    action: nil,
-                    keyEquivalent: ""
-                )
-                timeItem.isEnabled = false
-                menu.addItem(timeItem)
+                // Show start time
+                if let startTime = timerManager.activeEntry?.startTime {
+                    let formatter = DateFormatter()
+                    formatter.timeStyle = .short
+                    formatter.dateStyle = .none
+                    let formattedStartTime = formatter.string(from: startTime)
+
+                    let timeItem = NSMenuItem(
+                        title: "   Started at \(formattedStartTime)",
+                        action: nil,
+                        keyEquivalent: ""
+                    )
+                    timeItem.isEnabled = false
+                    menu.addItem(timeItem)
+                }
 
                 if !timerManager.currentNotes.isEmpty {
                     let notesItem = NSMenuItem(
@@ -169,7 +201,7 @@ class MenuBarManager: NSObject, ObservableObject {
 
         // App controls
         menu.addItem(NSMenuItem(
-            title: "Show TimeTracker",
+            title: "Show Chirp",
             action: #selector(showMainWindow),
             keyEquivalent: ""
         ))
@@ -213,7 +245,7 @@ class MenuBarManager: NSObject, ObservableObject {
 
         // Find and show the main window
         for window in NSApp.windows {
-            if window.title.contains("TimeTracker") || window.contentView != nil {
+            if window.title.contains("Chirp") || window.contentView != nil {
                 window.makeKeyAndOrderFront(nil)
                 return
             }

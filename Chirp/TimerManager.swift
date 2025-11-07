@@ -1,6 +1,6 @@
 //
 //  TimerManager.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //

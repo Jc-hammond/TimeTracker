@@ -1,6 +1,6 @@
 //
 //  DashboardView.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -61,6 +61,11 @@ struct DashboardView: View {
 
                 // Today's Summary
                 TodaySummaryView(duration: todayDuration, earnings: todayEarnings)
+                
+                Image("mascot")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 90)
 
                 Spacer()
             }

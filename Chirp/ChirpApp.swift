@@ -1,6 +1,6 @@
 //
-//  TimeTrackerApp.swift
-//  TimeTracker
+//  ChirpApp.swift
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -10,7 +10,7 @@ import SwiftData
 import AppKit
 
 @main
-struct TimeTrackerApp: App {
+struct ChirpApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var timerManager = TimerManager()
 
@@ -39,9 +39,13 @@ struct TimeTrackerApp: App {
             MainView()
                 .environmentObject(timerManager)
                 .onAppear {
+                    print("🔧 ChirpApp: Setting up dependencies and menu bar")
+
                     // Initialize app delegate dependencies
                     appDelegate.timerManager = timerManager
                     appDelegate.modelContext = sharedModelContainer.mainContext
+                    appDelegate.setupMenuBar()
+
                     timerManager.configure(with: sharedModelContainer.mainContext)
 
                     // Seed sample data on first launch
@@ -99,7 +103,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContext: ModelContext?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Setup will happen when dependencies are injected from TimeTrackerApp
+        print("🚀 AppDelegate: Application did finish launching")
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -112,21 +116,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    // Called when dependencies are set
     func setupMenuBar() {
+        print("🔧 AppDelegate: setupMenuBar called")
+        print("   - timerManager: \(timerManager != nil ? "✅" : "❌")")
+        print("   - modelContext: \(modelContext != nil ? "✅" : "❌")")
+        print("   - menuBarManager already exists: \(menuBarManager != nil ? "✅" : "❌")")
+
         guard let timerManager = timerManager,
-              let modelContext = modelContext,
-              menuBarManager == nil else { return }
+              let modelContext = modelContext else {
+            print("⚠️ AppDelegate: Missing dependencies, cannot create menu bar")
+            return
+        }
 
+        guard menuBarManager == nil else {
+            print("ℹ️ AppDelegate: Menu bar already initialized, skipping")
+            return
+        }
+
+        print("✨ AppDelegate: Creating MenuBarManager")
         menuBarManager = MenuBarManager(timerManager: timerManager, modelContext: modelContext)
-    }
-}
-
-// Extension to setup menu bar once dependencies are ready
-extension AppDelegate {
-    func setDependencies(timerManager: TimerManager, modelContext: ModelContext) {
-        self.timerManager = timerManager
-        self.modelContext = modelContext
-        setupMenuBar()
+        print("✅ AppDelegate: MenuBarManager created successfully")
     }
 }

@@ -1,6 +1,6 @@
 //
 //  ProjectViews.swift
-//  TimeTracker
+//  Chirp
 //
 //  Created by Connor Hammond on 11/6/25.
 //
@@ -472,6 +472,7 @@ struct EditProjectSheet: View {
     @State private var selectedClient: Client?
     @State private var showingNewClient = false
     @State private var showDeleteConfirmation = false
+    @State private var showPermanentDeleteConfirmation = false
     @FocusState private var focusedField: Field?
 
     enum Field {
@@ -523,6 +524,15 @@ struct EditProjectSheet: View {
                         Label("Archive Project", systemImage: "archivebox")
                     }
                 }
+
+                Section {
+                    Button(role: .destructive, action: { showPermanentDeleteConfirmation = true }) {
+                        Label("Delete Project Permanently", systemImage: "trash")
+                    }
+                } footer: {
+                    Text("Permanently deletes this project and all associated time entries. This cannot be undone.")
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                }
             }
             .formStyle(.grouped)
             .frame(width: 480, height: 450)
@@ -555,6 +565,18 @@ struct EditProjectSheet: View {
             } message: {
                 Text("Are you sure you want to archive '\(project.name)'? You can still see archived projects and their time entries, but they won't appear in active lists.")
             }
+            .alert("Delete Project Permanently", isPresented: $showPermanentDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    deleteProject()
+                }
+            } message: {
+                let entryCount = project.timeEntries?.count ?? 0
+                let totalDuration = project.timeEntries?.reduce(0) { $0 + $1.duration } ?? 0
+                let totalEarnings = project.timeEntries?.reduce(0) { $0 + $1.earnings } ?? 0
+
+                return Text("Are you sure you want to permanently delete '\(project.name)'?\n\nThis will delete \(entryCount) time \(entryCount == 1 ? "entry" : "entries") totaling \(totalDuration.formattedShort) and \(totalEarnings.formattedCurrency) in earnings.\n\nThis action cannot be undone.")
+            }
         }
         .sheet(isPresented: $showingNewClient) {
             NewClientSheet(onClientCreated: { client in
@@ -580,6 +602,12 @@ struct EditProjectSheet: View {
 
     private func archiveProject() {
         project.isArchived = true
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func deleteProject() {
+        modelContext.delete(project)
         try? modelContext.save()
         dismiss()
     }
