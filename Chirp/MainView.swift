@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import AppKit
 
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,8 +15,9 @@ struct MainView: View {
 
     @State private var selectedView: NavigationItem = .dashboard
     @State private var showingProjectSheet = false
+    @State private var showingManualEntry = false
 
-    enum NavigationItem {
+    enum NavigationItem: Hashable {
         case dashboard
         case projects
         case reports
@@ -44,6 +46,52 @@ struct MainView: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showingProjectSheet) {
             NewProjectSheet()
+        }
+        .sheet(isPresented: $showingManualEntry) {
+            ManualTimeEntrySheet()
+        }
+        .onAppear {
+            // Setup menu bar
+            if let appDelegate = NSApp.delegate as? AppDelegate {
+                appDelegate.setDependencies(timerManager: timerManager, modelContext: modelContext)
+            }
+
+            // Setup keyboard shortcut handlers
+            setupNotificationObservers()
+        }
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            forName: .newProject,
+            object: nil,
+            queue: .main
+        ) { _ in
+            showingProjectSheet = true
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .newEntry,
+            object: nil,
+            queue: .main
+        ) { _ in
+            showingManualEntry = true
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .showDashboard,
+            object: nil,
+            queue: .main
+        ) { _ in
+            selectedView = .dashboard
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .showReports,
+            object: nil,
+            queue: .main
+        ) { _ in
+            selectedView = .reports
         }
     }
 }

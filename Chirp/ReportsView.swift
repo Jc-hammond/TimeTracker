@@ -13,6 +13,7 @@ struct ReportsView: View {
     @Query private var allEntries: [TimeEntry]
 
     @State private var selectedPeriod: TimePeriod = .week
+    @State private var showingManualEntry = false
 
     enum TimePeriod: String, CaseIterable {
         case day = "Day"
@@ -106,6 +107,16 @@ struct ReportsView: View {
             .padding(.bottom, DesignSystem.Spacing.generous)
         }
         .navigationTitle("Reports")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingManualEntry = true }) {
+                    Label("Add Entry", systemImage: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showingManualEntry) {
+            ManualTimeEntrySheet()
+        }
     }
 }
 
@@ -231,52 +242,64 @@ struct TimeEntryList: View {
 struct TimeEntryRow: View {
     let entry: TimeEntry
 
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.comfortable) {
-            if let client = entry.project?.client {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(client.color)
-                    .frame(width: 4, height: 48)
-            }
+    @State private var showingEditSheet = false
 
-            VStack(alignment: .leading, spacing: 4) {
-                if let project = entry.project {
-                    Text(project.displayName)
-                        .font(DesignSystem.Typography.body.weight(.medium))
-                        .foregroundColor(DesignSystem.Colors.primaryText)
+    var body: some View {
+        Button(action: { showingEditSheet = true }) {
+            HStack(spacing: DesignSystem.Spacing.comfortable) {
+                if let client = entry.project?.client {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(client.color)
+                        .frame(width: 4, height: 48)
                 }
 
-                HStack(spacing: DesignSystem.Spacing.close) {
-                    Text(entry.startTime, style: .time)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                VStack(alignment: .leading, spacing: 4) {
+                    if let project = entry.project {
+                        Text(project.displayName)
+                            .font(DesignSystem.Typography.body.weight(.medium))
+                            .foregroundColor(DesignSystem.Colors.primaryText)
+                    }
 
-                    if !entry.notes.isEmpty {
-                        Text("•")
-                            .foregroundColor(DesignSystem.Colors.tertiaryText)
-
-                        Text(entry.notes)
+                    HStack(spacing: DesignSystem.Spacing.close) {
+                        Text(entry.startTime, style: .time)
                             .font(DesignSystem.Typography.caption)
                             .foregroundColor(DesignSystem.Colors.secondaryText)
-                            .lineLimit(1)
+
+                        if !entry.notes.isEmpty {
+                            Text("•")
+                                .foregroundColor(DesignSystem.Colors.tertiaryText)
+
+                            Text(entry.notes)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                                .lineLimit(1)
+                        }
                     }
                 }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(entry.duration.formattedShort)
+                        .font(DesignSystem.Typography.body.weight(.medium))
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+
+                    Text(entry.earnings.formattedCurrency)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.success)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
             }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(entry.duration.formattedShort)
-                    .font(DesignSystem.Typography.body.weight(.medium))
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-
-                Text(entry.earnings.formattedCurrency)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.success)
-            }
+            .padding(DesignSystem.Spacing.comfortable)
+            .background(DesignSystem.Colors.cardBackground)
+            .cornerRadius(DesignSystem.CornerRadius.medium)
         }
-        .padding(DesignSystem.Spacing.comfortable)
-        .background(DesignSystem.Colors.cardBackground)
-        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingEditSheet) {
+            EditTimeEntrySheet(entry: entry)
+        }
     }
 }
