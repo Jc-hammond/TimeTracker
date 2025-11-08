@@ -10,6 +10,7 @@ import SwiftData
 
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.windowSizeClass) private var sizeClass
     @Query(sort: \TaskItem.createdAt, order: .reverse) private var allTasks: [TaskItem]
 
     @State private var newTaskTitle = ""
@@ -17,6 +18,9 @@ struct TaskListView: View {
     @State private var newTaskPriority: TaskPriority = .shouldDo
     @State private var selectedFilter: TaskCategory?
     @State private var showCompleted = false
+
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var filteredTasks: [TaskItem] {
         var tasks = allTasks
@@ -44,25 +48,25 @@ struct TaskListView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: sizeClass == .compact ? 16 : 24) {
                 // Header
-                VStack(spacing: 8) {
+                VStack(spacing: sizeClass == .compact ? 4 : 8) {
                     Text("Tasks")
-                        .font(.largeTitle)
+                        .font(sizeClass == .compact ? .title2 : .largeTitle)
                         .fontWeight(.bold)
 
-                    Text("\(filteredTasks.filter { !$0.isCompleted }.count) active tasks")
-                        .font(.subheadline)
+                    Text("\(filteredTasks.filter { !$0.isCompleted }.count) active")
+                        .font(sizeClass == .compact ? .caption : .subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 40)
+                .padding(.top, sizeClass == .compact ? 60 : 40)
 
                 // Quick Add Task
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         TextField("Add a new task...", text: $newTaskTitle)
                             .textFieldStyle(.plain)
-                            .font(.body)
+                            .font(sizeClass == .compact ? .subheadline : .body)
                             .onSubmit {
                                 addTask()
                             }
@@ -76,34 +80,42 @@ struct TaskListView: View {
                                 }
                             }
                         } label: {
-                            Label(newTaskCategory.rawValue, systemImage: newTaskCategory.icon)
-                                .font(.subheadline)
-                                .foregroundStyle(newTaskCategory.color)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(newTaskCategory.color.opacity(0.15))
-                                .clipShape(Capsule())
+                            if sizeClass == .compact {
+                                Image(systemName: newTaskCategory.icon)
+                                    .foregroundStyle(newTaskCategory.color)
+                                    .frame(width: 32, height: 32)
+                                    .background(newTaskCategory.color.opacity(0.15))
+                                    .clipShape(Circle())
+                            } else {
+                                Label(newTaskCategory.rawValue, systemImage: newTaskCategory.icon)
+                                    .font(.subheadline)
+                                    .foregroundStyle(newTaskCategory.color)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(newTaskCategory.color.opacity(0.15))
+                                    .clipShape(Capsule())
+                            }
                         }
                         .buttonStyle(.plain)
 
                         Button(action: addTask) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.title2)
+                                .font(sizeClass == .compact ? .title3 : .title2)
                                 .foregroundStyle(.blue)
                         }
                         .buttonStyle(.plain)
                         .disabled(newTaskTitle.isEmpty)
                     }
-                    .padding()
+                    .padding(sizeClass == .compact ? 10 : 16)
                     .background(Color.secondary.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: sizeClass == .compact ? 10 : 12))
                 }
 
                 // Daily Intentions
                 if !dailyIntentions.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Today's Must-Do Items", systemImage: "star.fill")
-                            .font(.headline)
+                        Label(sizeClass == .compact ? "Must-Do" : "Today's Must-Do Items", systemImage: "star.fill")
+                            .font(sizeClass == .compact ? .subheadline : .headline)
                             .foregroundStyle(.orange)
 
                         VStack(spacing: 8) {
@@ -112,41 +124,45 @@ struct TaskListView: View {
                             }
                         }
                     }
-                    .padding()
+                    .padding(sizeClass == .compact ? 12 : 16)
                     .background(Color.orange.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
-                // Category Filter
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        FilterChip(
-                            title: "All",
-                            isSelected: selectedFilter == nil
-                        ) {
-                            selectedFilter = nil
-                        }
-
-                        ForEach(TaskCategory.allCases) { category in
-                            let count = allTasks.filter { $0.category == category && !$0.isCompleted }.count
+                // Category Filter (hide in compact mode)
+                if sizeClass == .full {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
                             FilterChip(
-                                title: category.rawValue,
-                                icon: category.icon,
-                                color: category.color,
-                                count: count,
-                                isSelected: selectedFilter == category
+                                title: "All",
+                                isSelected: selectedFilter == nil
                             ) {
-                                selectedFilter = category
+                                selectedFilter = nil
+                            }
+
+                            ForEach(TaskCategory.allCases) { category in
+                                let count = allTasks.filter { $0.category == category && !$0.isCompleted }.count
+                                FilterChip(
+                                    title: category.rawValue,
+                                    icon: category.icon,
+                                    color: category.color,
+                                    count: count,
+                                    isSelected: selectedFilter == category
+                                ) {
+                                    selectedFilter = category
+                                }
                             }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 // Show Completed Toggle
                 HStack {
                     Toggle("Show Completed", isOn: $showCompleted)
                         .toggleStyle(.switch)
+                        .font(sizeClass == .compact ? .caption : .body)
 
                     Spacer()
 
@@ -209,14 +225,27 @@ struct TaskListView: View {
 
                 Spacer()
             }
-            .padding()
+            .padding(sizeClass == .compact ? 12 : 16)
+            .animation(.easeInOut(duration: 0.3), value: sizeClass)
         }
-        .frame(maxWidth: 700)
+        .frame(maxWidth: sizeClass == .compact ? .infinity : 700)
         .frame(maxWidth: .infinity)
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
     }
 
     func addTask() {
         guard !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        // Validate title length
+        guard newTaskTitle.count <= 500 else {
+            errorMessage = "Task title is too long. Maximum 500 characters allowed."
+            showError = true
+            return
+        }
 
         let task = TaskItem(
             title: newTaskTitle,
@@ -224,6 +253,16 @@ struct TaskListView: View {
             priority: newTaskPriority
         )
         modelContext.insert(task)
+
+        // Save to ensure persistence
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to save task: \(error.localizedDescription)"
+            showError = true
+            modelContext.delete(task) // Rollback the insert
+            return
+        }
 
         // Reset form
         newTaskTitle = ""
@@ -237,6 +276,8 @@ struct TaskRow: View {
     let modelContext: ModelContext
 
     @State private var isHovering = false
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         HStack(spacing: 12) {
@@ -281,7 +322,7 @@ struct TaskRow: View {
             // Delete Button (shown on hover)
             if isHovering {
                 Button {
-                    modelContext.delete(task)
+                    deleteTask()
                 } label: {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
@@ -295,9 +336,15 @@ struct TaskRow: View {
         .onHover { hovering in
             isHovering = hovering
         }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
         .contextMenu {
             Button {
                 task.isDailyIntention.toggle()
+                saveChanges()
             } label: {
                 Label(
                     task.isDailyIntention ? "Remove from Must-Do" : "Mark as Must-Do",
@@ -311,6 +358,7 @@ struct TaskRow: View {
                 ForEach(TaskPriority.allCases) { priority in
                     Button {
                         task.priority = priority
+                        saveChanges()
                     } label: {
                         HStack {
                             Text(priority.rawValue)
@@ -328,6 +376,7 @@ struct TaskRow: View {
                 ForEach(TaskCategory.allCases) { category in
                     Button {
                         task.category = category
+                        saveChanges()
                     } label: {
                         Label {
                             Text(category.rawValue)
@@ -343,10 +392,31 @@ struct TaskRow: View {
             Divider()
 
             Button(role: .destructive) {
-                modelContext.delete(task)
+                deleteTask()
             } label: {
                 Label("Delete Task", systemImage: "trash")
             }
+        }
+    }
+
+    func deleteTask() {
+        modelContext.delete(task)
+
+        // Save to ensure persistence
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to delete task: \(error.localizedDescription)"
+            showError = true
+        }
+    }
+
+    func saveChanges() {
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to save changes: \(error.localizedDescription)"
+            showError = true
         }
     }
 }

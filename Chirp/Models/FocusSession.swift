@@ -78,7 +78,14 @@ final class FocusSession {
 
     var actualDuration: TimeInterval {
         let end = endTime ?? Date()
-        return end.timeIntervalSince(startTime) - totalPausedTime
+        var duration = end.timeIntervalSince(startTime) - totalPausedTime
+
+        // If currently paused, don't count time since pause
+        if isPaused, let pausedAt = pausedAt {
+            duration -= Date().timeIntervalSince(pausedAt)
+        }
+
+        return max(duration, 0)
     }
 
     var progress: Double {

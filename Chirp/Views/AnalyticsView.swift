@@ -11,6 +11,7 @@ import Charts
 
 struct AnalyticsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.windowSizeClass) private var sizeClass
     @Query(sort: \FocusSession.startTime, order: .reverse) private var sessions: [FocusSession]
     @Query private var tasks: [TaskItem]
 
@@ -90,18 +91,20 @@ struct AnalyticsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: sizeClass == .compact ? 16 : 24) {
                 // Header
-                VStack(spacing: 8) {
+                VStack(spacing: sizeClass == .compact ? 4 : 8) {
                     Text("Analytics")
-                        .font(.largeTitle)
+                        .font(sizeClass == .compact ? .title2 : .largeTitle)
                         .fontWeight(.bold)
 
-                    Text("Track your productivity patterns")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if sizeClass == .full {
+                        Text("Track your productivity patterns")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .padding(.top, 40)
+                .padding(.top, sizeClass == .compact ? 60 : 40)
 
                 // Period Selector
                 Picker("Period", selection: $selectedPeriod) {
@@ -110,73 +113,101 @@ struct AnalyticsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 400)
+                .frame(maxWidth: sizeClass == .compact ? .infinity : 400)
 
                 // Key Metrics
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180))], spacing: 16) {
-                    MetricCard(
-                        icon: "clock.fill",
-                        title: "Total Deep Work",
-                        value: formatHours(totalDeepWork),
-                        color: .blue
-                    )
+                if sizeClass == .compact {
+                    // Compact mode: Show only essential metrics in vertical list
+                    VStack(spacing: 12) {
+                        CompactMetricRow(
+                            icon: "clock.fill",
+                            title: "Deep Work",
+                            value: formatHours(totalDeepWork),
+                            color: .blue
+                        )
+                        CompactMetricRow(
+                            icon: "checkmark.circle.fill",
+                            title: "Completed",
+                            value: "\(completedTasksInPeriod.count)",
+                            color: .green
+                        )
+                        CompactMetricRow(
+                            icon: "flame.fill",
+                            title: "Sessions",
+                            value: "\(completedSessions.count)",
+                            color: .orange
+                        )
+                    }
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180))], spacing: 16) {
+                        MetricCard(
+                            icon: "clock.fill",
+                            title: "Total Deep Work",
+                            value: formatHours(totalDeepWork),
+                            color: .blue
+                        )
 
-                    MetricCard(
-                        icon: "checkmark.circle.fill",
-                        title: "Tasks Completed",
-                        value: "\(completedTasksInPeriod.count)",
-                        color: .green
-                    )
+                        MetricCard(
+                            icon: "checkmark.circle.fill",
+                            title: "Tasks Completed",
+                            value: "\(completedTasksInPeriod.count)",
+                            color: .green
+                        )
 
-                    MetricCard(
-                        icon: "flame.fill",
-                        title: "Focus Sessions",
-                        value: "\(completedSessions.count)",
-                        color: .orange
-                    )
+                        MetricCard(
+                            icon: "flame.fill",
+                            title: "Focus Sessions",
+                            value: "\(completedSessions.count)",
+                            color: .orange
+                        )
 
-                    MetricCard(
-                        icon: "star.fill",
-                        title: "Avg Focus Quality",
-                        value: String(format: "%.1f/5", averageFocusQuality),
-                        color: .yellow
-                    )
+                        MetricCard(
+                            icon: "star.fill",
+                            title: "Avg Focus Quality",
+                            value: String(format: "%.1f/5", averageFocusQuality),
+                            color: .yellow
+                        )
 
-                    MetricCard(
-                        icon: "exclamationmark.triangle.fill",
-                        title: "Interruptions",
-                        value: "\(totalInterruptions)",
-                        color: .red
-                    )
+                        MetricCard(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "Interruptions",
+                            value: "\(totalInterruptions)",
+                            color: .red
+                        )
 
-                    MetricCard(
-                        icon: "calendar",
-                        title: "Days Active",
-                        value: "\(uniqueActiveDays)",
-                        color: .purple
-                    )
+                        MetricCard(
+                            icon: "calendar",
+                            title: "Days Active",
+                            value: "\(uniqueActiveDays)",
+                            color: .purple
+                        )
+                    }
                 }
 
-                // Category Balance
+                // Category Balance (hide chart in compact, show list only)
                 if !categoryBreakdown.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Time by Category")
-                            .font(.title2)
+                            .font(sizeClass == .compact ? .headline : .title2)
                             .fontWeight(.semibold)
 
-                        CategoryBalanceChart(breakdown: categoryBreakdown)
+                        if sizeClass == .full {
+                            CategoryBalanceChart(breakdown: categoryBreakdown)
+                        }
 
                         // Category List
                         VStack(spacing: 8) {
                             ForEach(categoryBreakdown.sorted(by: { $0.value > $1.value }), id: \.key) { category, duration in
                                 HStack {
                                     Label(category.rawValue, systemImage: category.icon)
+                                        .font(sizeClass == .compact ? .caption : .body)
                                         .foregroundStyle(category.color)
 
                                     Spacer()
 
                                     VStack(alignment: .trailing, spacing: 2) {
                                         Text(formatHours(duration))
+                                            .font(sizeClass == .compact ? .subheadline : .body)
                                             .fontWeight(.semibold)
 
                                         let percentage = (duration / totalDeepWork) * 100
@@ -185,19 +216,19 @@ struct AnalyticsView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                                .padding()
+                                .padding(sizeClass == .compact ? 10 : 16)
                                 .background(category.color.opacity(0.1))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         }
                     }
-                    .padding()
+                    .padding(sizeClass == .compact ? 12 : 16)
                     .background(Color.secondary.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
-                // Daily Trend Chart
-                if completedSessions.count > 1 {
+                // Daily Trend Chart (hide in compact mode)
+                if sizeClass == .full && completedSessions.count > 1 {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Daily Deep Work Trend")
                             .font(.title2)
@@ -208,10 +239,11 @@ struct AnalyticsView: View {
                     .padding()
                     .background(Color.secondary.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                // Focus Quality Insights
-                if !completedSessions.isEmpty {
+                // Focus Quality Insights (hide in compact mode)
+                if sizeClass == .full && !completedSessions.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Focus Quality Insights")
                             .font(.title2)
@@ -245,40 +277,45 @@ struct AnalyticsView: View {
                     .padding()
                     .background(Color.secondary.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                // Build in Public Export
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Share Your Progress")
-                        .font(.title2)
-                        .fontWeight(.semibold)
+                // Build in Public Export (hide in compact mode)
+                if sizeClass == .full {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Share Your Progress")
+                            .font(.title2)
+                            .fontWeight(.semibold)
 
-                    Button {
-                        showingExportSheet = true
-                    } label: {
-                        Label("Generate Weekly Summary", systemImage: "square.and.arrow.up")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue.gradient)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        Button {
+                            showingExportSheet = true
+                        } label: {
+                            Label("Generate Weekly Summary", systemImage: "square.and.arrow.up")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue.gradient)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("Create a shareable summary for Twitter, LinkedIn, or your blog")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-
-                    Text("Create a shareable summary for Twitter, LinkedIn, or your blog")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .padding()
+                    .background(Color.blue.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
-                .padding()
-                .background(Color.blue.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
 
                 Spacer()
             }
-            .padding()
+            .padding(sizeClass == .compact ? 12 : 16)
+            .animation(.easeInOut(duration: 0.3), value: sizeClass)
         }
-        .frame(maxWidth: 900)
+        .frame(maxWidth: sizeClass == .compact ? .infinity : 900)
         .frame(maxWidth: .infinity)
         .sheet(isPresented: $showingExportSheet) {
             WeeklySummarySheet(
@@ -342,6 +379,35 @@ struct MetricCard: View {
         .padding()
         .background(color.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct CompactMetricRow: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+                .frame(width: 32)
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+        }
+        .padding(12)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

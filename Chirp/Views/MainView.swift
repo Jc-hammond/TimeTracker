@@ -31,47 +31,65 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var selectedItem: NavigationItem = .today
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @Query private var sessions: [FocusSession]
     @Query private var tasks: [TaskItem]
-
+    
     var body: some View {
-        NavigationSplitView {
-            // Sidebar
-            List(NavigationItem.allCases, selection: $selectedItem) { item in
-                NavigationLink(value: item) {
-                    Label(item.rawValue, systemImage: item.icon)
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Chirp")
-                            .font(.headline)
-                        Text("Indie Dev Companion")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        GeometryReader { geometry in
+            let windowSize = geometry.size
+            let sizeClass = WindowSizeClass.from(width: windowSize.width)
+            
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                // Sidebar
+                List(NavigationItem.allCases, selection: $selectedItem) { item in
+                    NavigationLink(value: item) {
+                        Label(item.rawValue, systemImage: item.icon)
                     }
-                    .padding(.vertical, 8)
+                }
+                .onChange(of: selectedItem) { _, _ in
+                    // Auto-hide sidebar in compact mode when navigation changes
+                    if sizeClass == .compact {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            columnVisibility = .detailOnly
+                        }
+                    }
+                }
+                .onChange(of: sizeClass) { _, newSizeClass in
+                    // Auto-hide sidebar in compact mode, show in full mode
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        columnVisibility = (newSizeClass == .full) ? .all : .detailOnly
+                    }
+                }
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
+            } detail: {
+                // Main content area
+                Group {
+                    switch selectedItem {
+                    case .today:
+                        TodayView()
+                    case .focus:
+                        FocusTimerView()
+                    case .tasks:
+                        TaskListView()
+                    case .analytics:
+                        AnalyticsView()
+                    case .settings:
+                        SettingsView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.windowSize, windowSize)
+                .environment(\.windowSizeClass, sizeClass)
+            }
+            .animation(.easeInOut(duration: 0.3), value: sizeClass)
+            .task {
+                // macOS 26 workaround: Initialize sidebar visibility with animation
+                // This fixes the NavigationSplitView initialization bug in macOS Tahoe
+                withAnimation {
+                    columnVisibility = (sizeClass == .full) ? .all : .detailOnly
                 }
             }
-        } detail: {
-            // Main content area
-            Group {
-                switch selectedItem {
-                case .today:
-                    TodayView()
-                case .focus:
-                    FocusTimerView()
-                case .tasks:
-                    TaskListView()
-                case .analytics:
-                    AnalyticsView()
-                case .settings:
-                    SettingsView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

@@ -10,6 +10,7 @@ import SwiftData
 
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.windowSizeClass) private var sizeClass
     @Query private var sessions: [FocusSession]
     @Query private var tasks: [TaskItem]
     @Query private var logs: [DailyLog]
@@ -53,18 +54,20 @@ struct TodayView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: sizeClass == .compact ? 16 : 24) {
                 // Header with Date
-                VStack(spacing: 8) {
+                VStack(spacing: sizeClass == .compact ? 4 : 8) {
                     Text(Date(), style: .date)
-                        .font(.title2)
+                        .font(sizeClass == .compact ? .title3 : .title2)
                         .fontWeight(.bold)
 
-                    Text("Today's Focus")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if sizeClass == .full {
+                        Text("Today's Focus")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .padding(.top, 40)
+                .padding(.top, sizeClass == .compact ? 60 : 40)
 
                 // Current Session (if active)
                 if let session = activeSession {
@@ -72,34 +75,55 @@ struct TodayView: View {
                 }
 
                 // Today's Stats
-                HStack(spacing: 16) {
-                    StatCard(
-                        icon: "clock.fill",
-                        title: "Deep Work",
-                        value: formatHours(totalDeepWorkToday),
-                        color: .blue
-                    )
+                if sizeClass == .compact {
+                    // Compact: Horizontal scroll or smaller cards
+                    HStack(spacing: 12) {
+                        CompactStatCard(
+                            icon: "clock.fill",
+                            value: formatHours(totalDeepWorkToday),
+                            color: .blue
+                        )
+                        CompactStatCard(
+                            icon: "checkmark.circle.fill",
+                            value: "\(completedToday.count)",
+                            color: .green
+                        )
+                        CompactStatCard(
+                            icon: "flame.fill",
+                            value: "\(todaySessions.filter { $0.endTime != nil }.count)",
+                            color: .orange
+                        )
+                    }
+                } else {
+                    HStack(spacing: 16) {
+                        StatCard(
+                            icon: "clock.fill",
+                            title: "Deep Work",
+                            value: formatHours(totalDeepWorkToday),
+                            color: .blue
+                        )
 
-                    StatCard(
-                        icon: "checkmark.circle.fill",
-                        title: "Completed",
-                        value: "\(completedToday.count)",
-                        color: .green
-                    )
+                        StatCard(
+                            icon: "checkmark.circle.fill",
+                            title: "Completed",
+                            value: "\(completedToday.count)",
+                            color: .green
+                        )
 
-                    StatCard(
-                        icon: "flame.fill",
-                        title: "Sessions",
-                        value: "\(todaySessions.filter { $0.endTime != nil }.count)",
-                        color: .orange
-                    )
+                        StatCard(
+                            icon: "flame.fill",
+                            title: "Sessions",
+                            value: "\(todaySessions.filter { $0.endTime != nil }.count)",
+                            color: .orange
+                        )
+                    }
                 }
 
                 // Daily Intentions
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Label("Today's Must-Do Items", systemImage: "star.fill")
-                            .font(.headline)
+                        Label(sizeClass == .compact ? "Must-Do" : "Today's Must-Do Items", systemImage: "star.fill")
+                            .font(sizeClass == .compact ? .subheadline : .headline)
                             .foregroundStyle(.orange)
 
                         Spacer()
@@ -108,29 +132,31 @@ struct TodayView: View {
                         let completed = dailyIntentions.filter { $0.isCompleted }.count
 
                         Text("\(completed)/\(dailyIntentions.count)")
-                            .font(.subheadline)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     let intentions = todayTasks.filter { $0.isDailyIntention }
 
                     if intentions.isEmpty {
-                        VStack(spacing: 12) {
+                        VStack(spacing: sizeClass == .compact ? 8 : 12) {
                             Image(systemName: "star")
-                                .font(.largeTitle)
+                                .font(sizeClass == .compact ? .title2 : .largeTitle)
                                 .foregroundStyle(.secondary)
 
                             Text("No daily intentions yet")
-                                .font(.subheadline)
+                                .font(sizeClass == .compact ? .caption : .subheadline)
                                 .foregroundStyle(.secondary)
 
-                            Text("Set 1-3 must-do items for today in the Tasks view")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
+                            if sizeClass == .full {
+                                Text("Set 1-3 must-do items for today in the Tasks view")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
+                        .padding(.vertical, sizeClass == .compact ? 16 : 24)
                     } else {
                         VStack(spacing: 8) {
                             ForEach(intentions) { task in
@@ -139,15 +165,18 @@ struct TodayView: View {
                         }
                     }
                 }
-                .padding()
+                .padding(sizeClass == .compact ? 12 : 16)
                 .background(Color.orange.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                // Energy Check-in
-                EnergyCheckIn(log: todayLog)
+                // Energy Check-in (hide in compact mode)
+                if sizeClass == .full {
+                    EnergyCheckIn(log: todayLog)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
 
-                // Recent Activity
-                if !completedToday.isEmpty {
+                // Recent Activity (hide in compact mode)
+                if sizeClass == .full && !completedToday.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Completed Today", systemImage: "checkmark.circle.fill")
                             .font(.headline)
@@ -187,13 +216,15 @@ struct TodayView: View {
                     .padding()
                     .background(Color.green.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 Spacer()
             }
-            .padding()
+            .padding(sizeClass == .compact ? 12 : 16)
+            .animation(.easeInOut(duration: 0.3), value: sizeClass)
         }
-        .frame(maxWidth: 700)
+        .frame(maxWidth: sizeClass == .compact ? .infinity : 700)
         .frame(maxWidth: .infinity)
     }
 
@@ -324,6 +355,29 @@ struct StatCard: View {
         .padding()
         .background(color.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct CompactStatCard: View {
+    let icon: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

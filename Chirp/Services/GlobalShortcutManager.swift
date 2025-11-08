@@ -14,6 +14,7 @@ class GlobalShortcutManager {
 
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
+    private var actionWrappers: [UnsafeMutableRawPointer] = []
 
     private init() {}
 
@@ -44,6 +45,9 @@ class GlobalShortcutManager {
 
         let wrapper = ActionWrapper(action: action)
         let wrapperPtr = Unmanaged.passRetained(wrapper).toOpaque()
+
+        // Store the pointer so we can release it later
+        actionWrappers.append(wrapperPtr)
 
         InstallEventHandler(
             GetApplicationEventTarget(),
@@ -79,6 +83,12 @@ class GlobalShortcutManager {
         if let eventHandler = eventHandler {
             RemoveEventHandler(eventHandler)
         }
+
+        // Release all action wrappers to prevent memory leaks
+        for wrapperPtr in actionWrappers {
+            Unmanaged<ActionWrapper>.fromOpaque(wrapperPtr).release()
+        }
+        actionWrappers.removeAll()
     }
 }
 

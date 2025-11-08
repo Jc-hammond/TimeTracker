@@ -10,6 +10,7 @@ import SwiftData
 
 struct FocusTimerView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.windowSizeClass) private var sizeClass
     @Query private var sessions: [FocusSession]
     @Query private var tasks: [TaskItem]
 
@@ -26,6 +27,11 @@ struct FocusTimerView: View {
     @State private var sessionEnergyLevel = 3
     @State private var sessionNotes = ""
 
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    @Namespace private var timerAnimation
+
     var activeSession: FocusSession? {
         sessions.first(where: { $0.isActive })
     }
@@ -40,9 +46,9 @@ struct FocusTimerView: View {
             // Ambient background gradient
             LinearGradient(
                 colors: [
-                    selectedCategory.color.opacity(0.08),
+                    selectedCategory.color.opacity(sizeClass == .compact ? 0.04 : 0.08),
                     Color.clear,
-                    selectedCategory.color.opacity(0.05)
+                    selectedCategory.color.opacity(sizeClass == .compact ? 0.03 : 0.05)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -50,47 +56,11 @@ struct FocusTimerView: View {
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: selectedCategory)
 
-            VStack(spacing: 32) {
-                // Header
-                VStack(spacing: 10) {
-                    Text("Focus Session")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        .tracking(0.5)
-
-                    if let session = activeSession {
-                        Text("Started \(session.startTime, style: .relative) ago")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Ready to start your deep work")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.top, 40)
-
-                // Controls or Timer Display based on state
-                if activeSession != nil {
-                    // Timer Display (prominent during session)
-                    timerDisplay
-
-                    // Active Session Controls
-                    activeSessionControls
-                } else {
-                    // Timer Preview
-                    timerDisplay
-                    
-                    // Session Setup
-                    sessionSetup
-                }
-
-                Spacer()
+            if sizeClass == .compact {
+                compactLayout
+            } else {
+                fullLayout
             }
-            .padding()
-            .frame(maxWidth: 700)
-            .frame(maxWidth: .infinity)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
@@ -99,9 +69,311 @@ struct FocusTimerView: View {
                 startTimer()
             }
         }
+        .onDisappear {
+            stopTimer()
+        }
         .sheet(isPresented: $showingSessionComplete) {
             sessionCompleteSheet
         }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    // MARK: - Full Layout
+    var fullLayout: some View {
+        VStack(spacing: 32) {
+            // Header
+            VStack(spacing: 10) {
+                Text("Focus Session")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .tracking(0.5)
+
+                if let session = activeSession {
+                    Text("Started \(session.startTime, style: .relative) ago")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Ready to start your deep work")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 40)
+
+            // Controls or Timer Display based on state
+            if activeSession != nil {
+                // Timer Display (prominent during session)
+                timerDisplay
+
+                // Active Session Controls
+                activeSessionControls
+            } else {
+                // Timer Preview
+                timerDisplay
+
+                // Session Setup
+                sessionSetup
+            }
+
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: 700)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Compact Layout
+    var compactLayout: some View {
+        VStack(spacing: 20) {
+            // Timer Display (always visible, more prominent)
+            compactTimerDisplay
+                .padding(.top, sizeClass == .compact ? 40 : 40)
+
+            // Compact Controls
+            if activeSession != nil {
+                compactActiveControls
+            } else {
+                compactSessionSetup
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .animation(.easeInOut(duration: 0.3), value: activeSession != nil)
+    }
+
+    // MARK: - Compact Timer Display
+    var compactTimerDisplay: some View {
+        let isActive = activeSession != nil
+        let size: CGFloat = 230
+        let fontSize: CGFloat = 50
+        let lineWidth: CGFloat = 17
+
+        return ZStack {
+            // Progress Ring Background
+            Circle()
+                .stroke(Color.gray.opacity(0.15), lineWidth: lineWidth)
+                .frame(width: size, height: size)
+
+            // Progress Ring with gradient
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            selectedCategory.color,
+                            selectedCategory.color.opacity(0.7)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(-90))
+                .matchedGeometryEffect(id: "progressRing", in: timerAnimation)
+                .shadow(color: selectedCategory.color.opacity(0.4), radius: 8, x: 0, y: 2)
+
+            // Time Display
+            VStack(spacing: isActive ? 10 : 8) {
+                Text(timeString)
+                    .font(.system(size: fontSize, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .tracking(0.5)
+
+                // Category display
+                if let session = activeSession {
+                    Text(session.category.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(session.category.color)
+                } else {
+                    Text(selectedCategory.rawValue)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(selectedCategory.color)
+                }
+
+                if let session = activeSession, let taskTitle = session.taskTitle {
+                    Text(taskTitle)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: 160)
+                }
+
+                if activeSession?.isPaused == true {
+                    Text("Paused")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.gradient)
+                        .clipShape(Capsule())
+                        .shadow(color: .orange.opacity(0.3), radius: 4, y: 1)
+                }
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isActive)
+        .animation(.easeInOut(duration: 0.3), value: selectedCategory)
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    // MARK: - Compact Active Controls
+    var compactActiveControls: some View {
+        VStack(spacing: 12) {
+            // Interruption Counter
+            if let session = activeSession {
+                HStack {
+                    Label("Interruptions", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+
+                    Spacer()
+
+                    Text("\(session.interruptionCount)")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.orange)
+
+                    Button {
+                        session.addInterruption()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Control Buttons
+            HStack(spacing: 12) {
+                // Pause/Resume
+                Button {
+                    togglePause()
+                } label: {
+                    Image(systemName: activeSession?.isPaused == true ? "play.fill" : "pause.fill")
+                        .font(.title2)
+                        .frame(width: 54, height: 54)
+                        .foregroundStyle(.blue)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.blue.opacity(0.3), lineWidth: 1.5)
+                        )
+                        .shadow(color: .blue.opacity(0.2), radius: 6, y: 2)
+                }
+                .buttonStyle(.plain)
+
+                // Stop
+                Button {
+                    stopSession()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.title2)
+                        .frame(width: 54, height: 54)
+                        .foregroundStyle(.white)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.green, Color.green.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(Circle())
+                        .shadow(color: .green.opacity(0.3), radius: 8, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    // MARK: - Compact Session Setup
+    var compactSessionSetup: some View {
+        VStack(spacing: 16) {
+            // Session Type Picker (compact)
+            Picker("", selection: $selectedSessionType) {
+                ForEach(SessionType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            // Category Picker (compact)
+            Menu {
+                ForEach(TaskCategory.allCases) { category in
+                    Button {
+                        selectedCategory = category
+                    } label: {
+                        Label(category.rawValue, systemImage: category.icon)
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: selectedCategory.icon)
+                        .foregroundStyle(selectedCategory.color)
+                    Text(selectedCategory.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+
+            // Start Button
+            Button {
+                startSession()
+            } label: {
+                Label("Start", systemImage: "play.fill")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                selectedCategory.color,
+                                selectedCategory.color.opacity(0.8)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: selectedCategory.color.opacity(0.4), radius: 12, y: 4)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 
     // MARK: - Timer Display
@@ -139,8 +411,8 @@ struct FocusTimerView: View {
                 )
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
+                .matchedGeometryEffect(id: "progressRing", in: timerAnimation)
                 .shadow(color: selectedCategory.color.opacity(0.5), radius: 12, x: 0, y: 4)
-                .animation(.easeInOut(duration: 0.3), value: progress)
 
             // Time Display
             VStack(spacing: isActive ? 12 : 8) {
@@ -185,6 +457,7 @@ struct FocusTimerView: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isActive)
         .animation(.easeInOut(duration: 0.3), value: selectedCategory)
+        .transition(.scale.combined(with: .opacity))
     }
 
     // MARK: - Session Setup (Before Starting)
@@ -510,9 +783,17 @@ struct FocusTimerView: View {
 
             // Notes
             VStack(alignment: .leading, spacing: 12) {
-                Text("Notes (Optional)")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                HStack {
+                    Text("Notes (Optional)")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+
+                    Spacer()
+
+                    Text("\(sessionNotes.count)/1000")
+                        .font(.caption)
+                        .foregroundStyle(sessionNotes.count > 1000 ? .red : .secondary)
+                }
 
                 TextEditor(text: $sessionNotes)
                     .frame(height: 80)
@@ -521,8 +802,14 @@ struct FocusTimerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .stroke(sessionNotes.count > 1000 ? Color.red.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
                     )
+                    .onChange(of: sessionNotes) { oldValue, newValue in
+                        // Limit to 1000 characters
+                        if newValue.count > 1000 {
+                            sessionNotes = String(newValue.prefix(1000))
+                        }
+                    }
             }
 
             // Save Button
@@ -583,7 +870,12 @@ struct FocusTimerView: View {
         currentSession = session
 
         // Save immediately to sync with menu bar
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to save session: \(error.localizedDescription)"
+            showError = true
+        }
 
         startTimer()
     }
@@ -599,7 +891,12 @@ struct FocusTimerView: View {
         }
 
         // Save immediately to sync with menu bar
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to save pause state: \(error.localizedDescription)"
+            showError = true
+        }
     }
 
     func stopSession() {
@@ -615,7 +912,13 @@ struct FocusTimerView: View {
         )
 
         // Save immediately to sync with menu bar
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to save completed session: \(error.localizedDescription)"
+            showError = true
+            return // Don't reset state if save failed
+        }
 
         // Reset state
         currentSession = nil

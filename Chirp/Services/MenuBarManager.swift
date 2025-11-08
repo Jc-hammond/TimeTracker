@@ -17,6 +17,7 @@ class MenuBarManager {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var modelContext: ModelContext?
+    private var sessionMonitorTimer: Timer?
 
     var isMenuBarEnabled = true
 
@@ -40,6 +41,13 @@ class MenuBarManager {
         self.modelContext = modelContext
 
         guard isMenuBarEnabled else { return }
+
+        // Prevent creating duplicate status items
+        if statusItem != nil {
+            // Already set up, just update the button
+            updateStatusButton()
+            return
+        }
 
         // Create status item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -212,11 +220,14 @@ class MenuBarManager {
     }
 
     private func startSessionMonitoring() {
-        // Update menu bar every second when session is active
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self, let session = self.currentSession else { return }
+        // Invalidate existing timer if any
+        sessionMonitorTimer?.invalidate()
 
-            if session.isActive {
+        // Update menu bar every second when session is active
+        sessionMonitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+
+            if let session = self.currentSession, session.isActive {
                 self.updateStatusButton()
 
                 // Check if session should end
@@ -227,6 +238,9 @@ class MenuBarManager {
                         body: "Your \(session.sessionType.rawValue) session is finished."
                     )
                 }
+            } else {
+                // Update button even when no session
+                self.updateStatusButton()
             }
         }
     }
@@ -257,8 +271,12 @@ class MenuBarManager {
     }
 
     func cleanup() {
+        sessionMonitorTimer?.invalidate()
+        sessionMonitorTimer = nil
+
         if let statusItem = statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
         }
     }
 }
