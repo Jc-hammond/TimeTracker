@@ -14,10 +14,15 @@ struct DashboardView: View {
 
     @Query(sort: \Project.lastUsedAt, order: .reverse) private var recentProjects: [Project]
     @Query private var allTimeEntries: [TimeEntry]
+    @Query private var userSettingsQuery: [UserSettings]
 
     @Binding var showingProjectSheet: Bool
     @State private var selectedProject: Project?
     @State private var showingProjectPicker = false
+
+    private var userName: String {
+        userSettingsQuery.first?.userName ?? "there"
+    }
 
     private var todayEntries: [TimeEntry] {
         let calendar = Calendar.current
@@ -43,7 +48,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.generous) {
                 // Greeting
-                Text("\(Date().greeting), Connor")
+                Text("\(Date().greeting), \(userName)")
                     .font(DesignSystem.Typography.title2)
                     .foregroundColor(DesignSystem.Colors.secondaryText)
                     .frame(maxWidth: .infinity)

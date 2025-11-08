@@ -16,6 +16,7 @@ struct MainView: View {
     @State private var selectedView: NavigationItem = .dashboard
     @State private var showingProjectSheet = false
     @State private var showingManualEntry = false
+    @State private var notificationTokens: [NSObjectProtocol] = []
 
     enum NavigationItem: Hashable {
         case dashboard
@@ -51,13 +52,19 @@ struct MainView: View {
             ManualTimeEntrySheet()
         }
         .onAppear {
-            // Setup keyboard shortcut handlers
-            setupNotificationObservers()
+            if notificationTokens.isEmpty {
+                setupNotificationObservers()
+            }
+        }
+        .onDisappear {
+            tearDownNotificationObservers()
         }
     }
 
     private func setupNotificationObservers() {
-        NotificationCenter.default.addObserver(
+        let center = NotificationCenter.default
+
+        let newProjectToken = center.addObserver(
             forName: .newProject,
             object: nil,
             queue: .main
@@ -65,7 +72,7 @@ struct MainView: View {
             showingProjectSheet = true
         }
 
-        NotificationCenter.default.addObserver(
+        let newEntryToken = center.addObserver(
             forName: .newEntry,
             object: nil,
             queue: .main
@@ -73,7 +80,7 @@ struct MainView: View {
             showingManualEntry = true
         }
 
-        NotificationCenter.default.addObserver(
+        let showDashboardToken = center.addObserver(
             forName: .showDashboard,
             object: nil,
             queue: .main
@@ -81,13 +88,27 @@ struct MainView: View {
             selectedView = .dashboard
         }
 
-        NotificationCenter.default.addObserver(
+        let showReportsToken = center.addObserver(
             forName: .showReports,
             object: nil,
             queue: .main
         ) { _ in
             selectedView = .reports
         }
+
+        notificationTokens = [
+            newProjectToken,
+            newEntryToken,
+            showDashboardToken,
+            showReportsToken,
+        ]
+    }
+
+    private func tearDownNotificationObservers() {
+        guard !notificationTokens.isEmpty else { return }
+        let center = NotificationCenter.default
+        notificationTokens.forEach { center.removeObserver($0) }
+        notificationTokens.removeAll()
     }
 }
 
@@ -209,6 +230,10 @@ struct ProjectRowView: View {
 
     private func deleteProject() {
         modelContext.delete(project)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to delete project \(project.id)", error: error)
+        }
     }
 }

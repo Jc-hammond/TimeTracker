@@ -10,6 +10,18 @@ import SwiftUI
 // MARK: - Design System
 enum DesignSystem {
 
+    // MARK: - Currency Configuration
+    private static var currentCurrencyCode: String = "USD"
+    private static var currentCurrencySymbol: String = "$"
+
+    static func updateCurrency(code: String, symbol: String) {
+        currentCurrencyCode = code
+        currentCurrencySymbol = symbol
+    }
+
+    static var currencyCode: String { currentCurrencyCode }
+    static var currencySymbol: String { currentCurrencySymbol }
+
     // MARK: - Colors
     enum Colors {
         // Primary accent (Blue for trust & productivity)
@@ -229,8 +241,8 @@ extension Double {
     var formattedCurrency: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: self)) ?? "$0.00"
+        formatter.currencyCode = DesignSystem.currencyCode
+        return formatter.string(from: NSNumber(value: self)) ?? "\(DesignSystem.currencySymbol)0.00"
     }
 }
 

@@ -13,8 +13,14 @@ class SampleDataManager {
     static func createSampleData(context: ModelContext) {
         // Check if we already have data
         let descriptor = FetchDescriptor<Client>()
-        if let count = try? context.fetchCount(descriptor), count > 0 {
-            return // Already have data
+        do {
+            let count = try context.fetchCount(descriptor)
+            if count > 0 {
+                return // Already have data
+            }
+        } catch {
+            print("❌ SampleDataManager: Failed to fetch client count: \(error)")
+            return
         }
 
         // Create sample clients
@@ -82,6 +88,10 @@ class SampleDataManager {
             context.insert(entry5)
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            print("❌ SampleDataManager: Failed to save sample data: \(error)")
+        }
     }
 }

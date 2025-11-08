@@ -8,58 +8,52 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import Combine
 
 @main
 struct ChirpApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var timerManager = TimerManager()
+    @StateObject private var appBootstrapper = AppBootstrapper()
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Client.self,
-            Project.self,
-            TimeEntry.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    private let sharedModelContainer: ModelContainer?
+    private static let chirpSchema = Schema([
+        Client.self,
+        Project.self,
+        TimeEntry.self,
+        UserSettings.self,
+    ])
 
     init() {
-        // Configure app to stay running with windows closed
-//        NSApp.setActivationPolicy(.regular)
+        do {
+            sharedModelContainer = try Self.makeModelContainer()
+        } catch {
+            LogManager.app.error("Failed to create persistent ModelContainer", error: error)
+            do {
+                sharedModelContainer = try Self.makeModelContainer(isInMemoryOnly: true)
+                LogManager.app.warning("Using in-memory data store fallback. Changes will not be persisted.")
+            } catch {
+                sharedModelContainer = nil
+                LogManager.app.fault("Unable to create even the in-memory ModelContainer: \(error.localizedDescription)")
+            }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            MainView()
-                .environmentObject(timerManager)
-                .onAppear {
-                    print("🔧 ChirpApp: Setting up dependencies and menu bar")
-
-                    // Initialize app delegate dependencies
-                    appDelegate.timerManager = timerManager
-                    appDelegate.modelContext = sharedModelContainer.mainContext
-                    appDelegate.setupMenuBar()
-
-                    timerManager.configure(with: sharedModelContainer.mainContext)
-
-                    // Seed sample data on first launch
-                    Task { @MainActor in
-                        SampleDataManager.createSampleData(context: sharedModelContainer.mainContext)
-
-                        // Restore timer state after data is loaded
-                        timerManager.restoreTimerState()
+            if let container = sharedModelContainer {
+                MainView()
+                    .environmentObject(timerManager)
+                    .modelContainer(container)
+                    .onAppear {
+                        performInitialSetup(using: container)
                     }
-                }
+            } else {
+                DataStoreErrorView()
+            }
         }
-        .modelContainer(sharedModelContainer)
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 520, height: 680)
+        .defaultSize(width: sharedModelContainer != nil ? 520 : 420, height: sharedModelContainer != nil ? 680 : 280)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Project...") {
@@ -86,6 +80,31 @@ struct ChirpApp: App {
             }
         }
     }
+
+    @MainActor
+    private func performInitialSetup(using container: ModelContainer) {
+        guard !appBootstrapper.hasPerformedSetup else {
+            return
+        }
+
+        LogManager.app.info("Setting up dependencies and menu bar")
+
+        appBootstrapper.hasPerformedSetup = true
+
+        appDelegate.timerManager = timerManager
+        appDelegate.modelContext = container.mainContext
+        appDelegate.setupMenuBar()
+
+        timerManager.configure(with: container.mainContext)
+
+        SampleDataManager.createSampleData(context: container.mainContext)
+        timerManager.restoreTimerState()
+    }
+
+    private static func makeModelContainer(isInMemoryOnly: Bool = false) throws -> ModelContainer {
+        let configuration = ModelConfiguration(schema: chirpSchema, isStoredInMemoryOnly: isInMemoryOnly)
+        return try ModelContainer(for: chirpSchema, configurations: [configuration])
+    }
 }
 
 // MARK: - Notification Names
@@ -103,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContext: ModelContext?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("🚀 AppDelegate: Application did finish launching")
+        LogManager.app.info("Application did finish launching")
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -117,24 +136,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupMenuBar() {
-        print("🔧 AppDelegate: setupMenuBar called")
-        print("   - timerManager: \(timerManager != nil ? "✅" : "❌")")
-        print("   - modelContext: \(modelContext != nil ? "✅" : "❌")")
-        print("   - menuBarManager already exists: \(menuBarManager != nil ? "✅" : "❌")")
+        LogManager.app.debug("setupMenuBar called - timerManager: \(timerManager != nil), modelContext: \(modelContext != nil), menuBarManager exists: \(menuBarManager != nil)")
 
         guard let timerManager = timerManager,
               let modelContext = modelContext else {
-            print("⚠️ AppDelegate: Missing dependencies, cannot create menu bar")
+            LogManager.app.warning("Missing dependencies, cannot create menu bar")
             return
         }
 
         guard menuBarManager == nil else {
-            print("ℹ️ AppDelegate: Menu bar already initialized, skipping")
+            LogManager.app.info("Menu bar already initialized, skipping")
             return
         }
 
-        print("✨ AppDelegate: Creating MenuBarManager")
+        LogManager.app.info("Creating MenuBarManager")
         menuBarManager = MenuBarManager(timerManager: timerManager, modelContext: modelContext)
-        print("✅ AppDelegate: MenuBarManager created successfully")
+        LogManager.app.info("MenuBarManager created successfully")
+    }
+}
+
+// MARK: - App Bootstrap Support
+private final class AppBootstrapper: ObservableObject {
+    @Published var hasPerformedSetup = false
+}
+
+private struct DataStoreErrorView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Chirp Can’t Access Its Data")
+                .font(.title3).bold()
+            Text("Please quit and relaunch the app. If the issue persists, contact support.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+            Button("Quit Chirp") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DesignSystem.Colors.secondaryBackground)
     }
 }

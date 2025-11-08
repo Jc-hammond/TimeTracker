@@ -157,6 +157,7 @@ struct NewProjectSheet: View {
     @State private var hourlyRate = ""
     @State private var selectedClient: Client?
     @State private var showingNewClient = false
+    @State private var validationError: String?
     @FocusState private var focusedField: Field?
 
     enum Field {
@@ -170,10 +171,29 @@ struct NewProjectSheet: View {
                     TextField("Name:", text: $projectName)
                         .focused($focusedField, equals: .projectName)
                         .help("Enter the project name")
+                        .onChange(of: projectName) { _, newValue in
+                            projectName = ValidationUtility.truncate(newValue, to: ValidationUtility.Limits.projectName)
+                            validationError = nil
+                        }
+
+                    Text("\(projectName.count)/\(ValidationUtility.Limits.projectName)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
 
                     TextField("Hourly rate:", text: $hourlyRate)
                         .focused($focusedField, equals: .hourlyRate)
-                        .help("Enter the hourly rate in USD")
+                        .help("Enter the hourly rate")
+                        .onChange(of: hourlyRate) { _, _ in
+                            validationError = nil
+                        }
+                }
+
+                if let error = validationError {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.callout)
+                    }
                 }
 
                 Section("Client") {
@@ -228,12 +248,31 @@ struct NewProjectSheet: View {
     }
 
     private func createProject() {
-        guard let rate = Double(hourlyRate) else { return }
+        // Validate project name
+        let nameResult = ValidationUtility.validateProjectName(projectName)
+        guard nameResult.isValid, let validName = nameResult.value else {
+            validationError = nameResult.message
+            return
+        }
 
-        let project = Project(name: projectName, hourlyRate: rate, client: selectedClient)
+        // Validate hourly rate
+        let rateResult = ValidationUtility.validateHourlyRate(hourlyRate)
+        guard rateResult.isValid, let validRateString = rateResult.value,
+              let rate = Double(validRateString) else {
+            validationError = rateResult.message
+            return
+        }
+
+        let project = Project(name: validName, hourlyRate: rate, client: selectedClient)
         modelContext.insert(project)
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to save new project", error: error)
+            validationError = "Failed to save project. Please try again."
+            return
+        }
         dismiss()
     }
 }
@@ -321,7 +360,11 @@ struct NewClientSheet: View {
         let client = Client(name: clientName, colorHex: selectedColorHex, defaultHourlyRate: rate)
         modelContext.insert(client)
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to save new client", error: error)
+        }
         onClientCreated(client)
         dismiss()
     }
@@ -336,41 +379,93 @@ struct ProjectListView: View {
     @State private var searchText = ""
     @State private var projectToEdit: Project?
     @State private var projectToArchive: Project?
+    @State private var projectToUnarchive: Project?
+    @State private var showArchivedProjects = false
 
-    var filteredProjects: [Project] {
-        if searchText.isEmpty {
-            return projects.filter { !$0.isArchived }
+    var activeProjects: [Project] {
+        let filtered = searchText.isEmpty ? projects : projects.filter { project in
+            project.name.localizedCaseInsensitiveContains(searchText) ||
+            project.client?.name.localizedCaseInsensitiveContains(searchText) == true
         }
-        return projects.filter { project in
-            !project.isArchived &&
-            (project.name.localizedCaseInsensitiveContains(searchText) ||
-             project.client?.name.localizedCaseInsensitiveContains(searchText) == true)
+        return filtered.filter { !$0.isArchived }
+    }
+
+    var archivedProjects: [Project] {
+        let filtered = searchText.isEmpty ? projects : projects.filter { project in
+            project.name.localizedCaseInsensitiveContains(searchText) ||
+            project.client?.name.localizedCaseInsensitiveContains(searchText) == true
         }
+        return filtered.filter { $0.isArchived }
     }
 
     var body: some View {
-        VStack {
-            List {
-                ForEach(filteredProjects) { project in
-                    ProjectListRow(project: project) {
-                        projectToEdit = project
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            projectToArchive = project
-                        } label: {
-                            Label("Archive", systemImage: "archivebox")
-                        }
+        VStack(spacing: 0) {
+            // Show archived toggle
+            HStack {
+                Toggle("Show Archived", isOn: $showArchivedProjects)
+                    .toggleStyle(.checkbox)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                Spacer()
+            }
+            .background(DesignSystem.Colors.cardBackground.opacity(0.5))
 
-                        Button {
+            List {
+                // Active Projects Section
+                Section {
+                    ForEach(activeProjects) { project in
+                        ProjectListRow(project: project) {
                             projectToEdit = project
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
                         }
-                        .tint(.blue)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                projectToArchive = project
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
+                            }
+
+                            Button {
+                                projectToEdit = project
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                    .onDelete(perform: deleteProjects)
+                } header: {
+                    if showArchivedProjects && !archivedProjects.isEmpty {
+                        Text("Active Projects")
                     }
                 }
-                .onDelete(perform: deleteProjects)
+
+                // Archived Projects Section
+                if showArchivedProjects && !archivedProjects.isEmpty {
+                    Section {
+                        ForEach(archivedProjects) { project in
+                            ArchivedProjectRow(project: project) {
+                                projectToEdit = project
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    projectToUnarchive = project
+                                } label: {
+                                    Label("Unarchive", systemImage: "arrow.up.bin")
+                                }
+                                .tint(.green)
+
+                                Button {
+                                    projectToEdit = project
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.blue)
+                            }
+                        }
+                    } header: {
+                        Text("Archived Projects")
+                    }
+                }
             }
             .searchable(text: $searchText, prompt: "Search projects")
         }
@@ -403,24 +498,59 @@ struct ProjectListView: View {
                 Text("Are you sure you want to archive '\(project.name)'? You can still see archived projects and their time entries, but they won't appear in active lists.")
             }
         }
+        .alert("Unarchive Project", isPresented: .init(
+            get: { projectToUnarchive != nil },
+            set: { if !$0 { projectToUnarchive = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                projectToUnarchive = nil
+            }
+            Button("Unarchive") {
+                if let project = projectToUnarchive {
+                    unarchiveProject(project)
+                }
+            }
+        } message: {
+            if let project = projectToUnarchive {
+                Text("Unarchive '\(project.name)'? It will be restored to your active projects list.")
+            }
+        }
     }
 
     private func archiveProject(_ project: Project) {
         project.isArchived = true
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to archive project \(project.id)", error: error)
+        }
         projectToArchive = nil
     }
 
+    private func unarchiveProject(_ project: Project) {
+        project.isArchived = false
+        do {
+            try modelContext.save()
+            LogManager.data.info("Unarchived project: \(project.name)")
+        } catch {
+            LogManager.data.error("Failed to unarchive project \(project.id)", error: error)
+        }
+        projectToUnarchive = nil
+    }
+
     private func deleteProjects(at offsets: IndexSet) {
-        let currentFiltered = filteredProjects
         let targets = offsets.compactMap { index -> Project? in
-            guard currentFiltered.indices.contains(index) else { return nil }
-            return currentFiltered[index]
+            guard activeProjects.indices.contains(index) else { return nil }
+            return activeProjects[index]
         }
         for project in targets {
             project.isArchived = true
         }
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to delete selected projects", error: error)
+        }
     }
 }
 
@@ -456,6 +586,53 @@ struct ProjectListRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ArchivedProjectRow: View {
+    let project: Project
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack {
+                if let client = project.client {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(client.color.opacity(0.5))
+                        .frame(width: 4, height: 40)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(project.name)
+                            .font(DesignSystem.Typography.body.weight(.medium))
+
+                        // Archived badge
+                        Text("Archived")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.tertiaryText)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(DesignSystem.Colors.tertiaryText.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+
+                    if let client = project.client {
+                        Text(client.name)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                Text(project.hourlyRate.formattedCurrency + "/hr")
+                    .font(DesignSystem.Typography.callout)
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
+            }
+        }
+        .buttonStyle(.plain)
+        .opacity(0.7)
     }
 }
 
@@ -520,8 +697,14 @@ struct EditProjectSheet: View {
                 }
 
                 Section {
-                    Button(role: .destructive, action: { showDeleteConfirmation = true }) {
-                        Label("Archive Project", systemImage: "archivebox")
+                    if project.isArchived {
+                        Button(action: { unarchiveProject() }) {
+                            Label("Unarchive Project", systemImage: "arrow.up.bin")
+                        }
+                    } else {
+                        Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                            Label("Archive Project", systemImage: "archivebox")
+                        }
                     }
                 }
 
@@ -596,19 +779,42 @@ struct EditProjectSheet: View {
         project.hourlyRate = rate
         project.client = selectedClient
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to save changes for project \(project.id)", error: error)
+        }
         dismiss()
     }
 
     private func archiveProject() {
         project.isArchived = true
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to archive project \(project.id)", error: error)
+        }
+        dismiss()
+    }
+
+    private func unarchiveProject() {
+        project.isArchived = false
+        do {
+            try modelContext.save()
+            LogManager.data.info("Unarchived project: \(project.name)")
+        } catch {
+            LogManager.data.error("Failed to unarchive project \(project.id)", error: error)
+        }
         dismiss()
     }
 
     private func deleteProject() {
         modelContext.delete(project)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to delete project \(project.id)", error: error)
+        }
         dismiss()
     }
 }

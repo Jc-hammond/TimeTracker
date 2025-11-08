@@ -34,6 +34,10 @@ final class TimerManager: ObservableObject {
         // Timer state is restored via restoreTimerState() called from app
     }
 
+    deinit {
+        timer?.invalidate()
+    }
+
     func configure(with context: ModelContext) {
         modelContext = context
     }
@@ -81,7 +85,15 @@ final class TimerManager: ObservableObject {
             }
         )
 
-        guard let project = try? context.fetch(descriptor).first else {
+        let project: Project
+        do {
+            guard let fetchedProject = try context.fetch(descriptor).first else {
+                clearTimerState()
+                return
+            }
+            project = fetchedProject
+        } catch {
+            LogManager.timer.error("Failed to fetch project while restoring timer", error: error)
             clearTimerState()
             return
         }
@@ -117,7 +129,7 @@ final class TimerManager: ObservableObject {
     // MARK: - Timer Control
     func startTimer(for project: Project, notes: String = "") {
         // Persist any existing entry before starting a new one
-        stopTimer()
+        _ = stopTimer()
 
         // Create new time entry
         let now = Date()
@@ -131,7 +143,13 @@ final class TimerManager: ObservableObject {
         totalPausedDuration = 0
 
         project.lastUsedAt = Date()
-        try? modelContext?.save()
+        if let context = modelContext {
+            do {
+                try context.save()
+            } catch {
+                LogManager.timer.error("Failed to save context when starting timer", error: error)
+            }
+        }
 
         startTimer()
         saveTimerState()
@@ -189,6 +207,14 @@ final class TimerManager: ObservableObject {
 
         guard let entry = activeEntry else { return nil }
 
+        // Check if project still exists (could have been deleted)
+        if entry.project == nil {
+            LogManager.timer.warning("Timer stopped but project was deleted. Entry discarded.")
+            resetState()
+            clearTimerState()
+            return nil
+        }
+
         entry.endTime = Date()
         entry.notes = currentNotes
 
@@ -225,7 +251,7 @@ final class TimerManager: ObservableObject {
         do {
             try context.save()
         } catch {
-            print("Failed to save time entry: \(error)")
+            LogManager.data.error("Failed to save time entry", error: error)
         }
     }
 

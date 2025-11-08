@@ -18,35 +18,34 @@ class MenuBarManager: NSObject, ObservableObject {
     private var isUpdatingMenu = false
 
     init(timerManager: TimerManager, modelContext: ModelContext) {
-        print("🎯 MenuBarManager: Initializing")
+        LogManager.menu.info("Initializing MenuBarManager")
         self.timerManager = timerManager
         self.modelContext = modelContext
         super.init()
 
         setupMenuBar()
         observeTimerChanges()
-        print("✅ MenuBarManager: Initialization complete")
+        LogManager.menu.info("MenuBarManager initialization complete")
     }
 
     private func setupMenuBar() {
-        print("🎨 MenuBarManager: Setting up menu bar")
+        LogManager.menu.debug("Setting up menu bar")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let statusItem = statusItem {
-            print("✅ MenuBarManager: Status item created successfully")
+            LogManager.menu.info("Status item created successfully")
 
-            if let button = statusItem.button {
-                print("✅ MenuBarManager: Status item button exists")
+            if statusItem.button != nil {
                 updateMenuBarButton()
             } else {
-                print("⚠️ MenuBarManager: Status item button is nil")
+                LogManager.menu.warning("Status item button is nil")
             }
         } else {
-            print("❌ MenuBarManager: Failed to create status item")
+            LogManager.menu.error("Failed to create status item")
         }
 
         updateMenu()
-        print("✅ MenuBarManager: Menu bar setup complete")
+        LogManager.menu.info("Menu bar setup complete")
     }
 
     private func observeTimerChanges() {
@@ -172,7 +171,8 @@ class MenuBarManager: NSObject, ObservableObject {
             let descriptor = FetchDescriptor<Project>(
                 sortBy: [SortDescriptor(\.lastUsedAt, order: .reverse)]
             )
-            if let projects = try? modelContext.fetch(descriptor) {
+            do {
+                let projects = try modelContext.fetch(descriptor)
                 let recentProjects = Array(projects.prefix(5).filter { !$0.isArchived })
 
                 if recentProjects.isEmpty {
@@ -194,6 +194,15 @@ class MenuBarManager: NSObject, ObservableObject {
                         menu.addItem(item)
                     }
                 }
+            } catch {
+                LogManager.menu.error("Failed to fetch recent projects", error: error)
+                let errorItem = NSMenuItem(
+                    title: "   Unable to load projects",
+                    action: nil,
+                    keyEquivalent: ""
+                )
+                errorItem.isEnabled = false
+                menu.addItem(errorItem)
             }
 
             menu.addItem(NSMenuItem.separator())

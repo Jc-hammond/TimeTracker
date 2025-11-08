@@ -10,10 +10,12 @@ import SwiftData
 import Charts
 
 struct ReportsView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query private var allEntries: [TimeEntry]
 
     @State private var selectedPeriod: TimePeriod = .week
     @State private var showingManualEntry = false
+    @State private var showingCSVExport = false
 
     enum TimePeriod: String, CaseIterable {
         case day = "Day"
@@ -59,13 +61,26 @@ struct ReportsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.generous) {
-                // Period selector
-                Picker("Period", selection: $selectedPeriod) {
-                    ForEach(TimePeriod.allCases, id: \.self) { period in
-                        Text(period.rawValue).tag(period)
+                // Period selector and export buttons
+                VStack(spacing: DesignSystem.Spacing.comfortable) {
+                    Picker("Period", selection: $selectedPeriod) {
+                        ForEach(TimePeriod.allCases, id: \.self) { period in
+                            Text(period.rawValue).tag(period)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    // Export button
+                    HStack {
+                        Button(action: { showingCSVExport = true }) {
+                            Label("Export CSV", systemImage: "tablecells")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(allEntries.isEmpty)
+
+                        Spacer()
                     }
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.top)
 
@@ -116,6 +131,9 @@ struct ReportsView: View {
         }
         .sheet(isPresented: $showingManualEntry) {
             ManualTimeEntrySheet()
+        }
+        .sheet(isPresented: $showingCSVExport) {
+            CSVExportSheet(entries: allEntries)
         }
     }
 }
@@ -255,9 +273,18 @@ struct TimeEntryRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     if let project = entry.project {
-                        Text(project.displayName)
-                            .font(DesignSystem.Typography.body.weight(.medium))
-                            .foregroundColor(DesignSystem.Colors.primaryText)
+                        HStack(spacing: 6) {
+                            Text(project.displayName)
+                                .font(DesignSystem.Typography.body.weight(.medium))
+                                .foregroundColor(DesignSystem.Colors.primaryText)
+
+                            // Archived indicator
+                            if project.isArchived {
+                                Image(systemName: "archivebox.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(DesignSystem.Colors.tertiaryText)
+                            }
+                        }
                     }
 
                     HStack(spacing: DesignSystem.Spacing.close) {

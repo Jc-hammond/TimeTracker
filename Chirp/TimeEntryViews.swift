@@ -46,7 +46,7 @@ struct EditTimeEntrySheet: View {
                 Section("Project") {
                     Picker("Project:", selection: $selectedProject) {
                         Text("No project").tag(nil as Project?)
-                        ForEach(projects.filter { !$0.isArchived }) { project in
+                        ForEach(projects.filter { !$0.isArchived || $0.id == entry.project?.id }) { project in
                             HStack {
                                 if let client = project.client {
                                     Circle()
@@ -54,6 +54,13 @@ struct EditTimeEntrySheet: View {
                                         .frame(width: 12, height: 12)
                                 }
                                 Text(project.displayName)
+
+                                // Archived indicator
+                                if project.isArchived {
+                                    Text("(Archived)")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.tertiaryText)
+                                }
                             }
                             .tag(project as Project?)
                         }
@@ -142,13 +149,21 @@ struct EditTimeEntrySheet: View {
         entry.endTime = endTime
         entry.notes = notes
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to save entry \(entry.id)", error: error)
+        }
         dismiss()
     }
 
     private func deleteEntry() {
         modelContext.delete(entry)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to delete entry \(entry.id)", error: error)
+        }
         dismiss()
     }
 }
@@ -166,6 +181,8 @@ struct ManualTimeEntrySheet: View {
     @State private var useDuration = false
     @State private var durationHours = 0
     @State private var durationMinutes = 0
+    @State private var showDurationWarning = false
+    @State private var durationWarningMessage = ""
 
     var calculatedEndTime: Date {
         if useDuration {
@@ -291,6 +308,16 @@ struct ManualTimeEntrySheet: View {
                 }
             }
         }
+        .alert("Long Duration Detected", isPresented: $showDurationWarning) {
+            Button("Add Anyway", role: .none) {
+                confirmAndAddEntry()
+            }
+            Button("Cancel", role: .cancel) {
+                showDurationWarning = false
+            }
+        } message: {
+            Text(durationWarningMessage)
+        }
     }
 
     private var isValid: Bool {
@@ -306,15 +333,50 @@ struct ManualTimeEntrySheet: View {
     private func addEntry() {
         guard let project = selectedProject else { return }
 
-        let entry = TimeEntry(project: project, startTime: startTime, notes: notes)
+        // Validate duration
+        let durationResult = ValidationUtility.validateDuration(start: startTime, end: calculatedEndTime)
+
+        if durationResult.isWarning {
+            // Show warning alert for long durations
+            durationWarningMessage = durationResult.message ?? ""
+            showDurationWarning = true
+            return
+        }
+
+        // Validate and truncate notes
+        let truncatedNotes = ValidationUtility.truncate(notes, to: ValidationUtility.Limits.notes)
+
+        let entry = TimeEntry(project: project, startTime: startTime, notes: truncatedNotes)
         entry.endTime = calculatedEndTime
 
         project.lastUsedAt = Date()
 
         modelContext.insert(entry)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to add new entry", error: error)
+        }
+
+        dismiss()
+    }
+
+    private func confirmAndAddEntry() {
+        // Bypass warning and add anyway
+        guard let project = selectedProject else { return }
+
+        let truncatedNotes = ValidationUtility.truncate(notes, to: ValidationUtility.Limits.notes)
+        let entry = TimeEntry(project: project, startTime: startTime, notes: truncatedNotes)
+        entry.endTime = calculatedEndTime
+        project.lastUsedAt = Date()
+
+        modelContext.insert(entry)
+        do {
+            try modelContext.save()
+        } catch {
+            LogManager.data.error("Failed to add new entry", error: error)
+        }
 
         dismiss()
     }
 }
-
